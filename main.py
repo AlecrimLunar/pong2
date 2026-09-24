@@ -43,6 +43,37 @@ TAMANHO_BOLA = 15
 VEL_INICIAL_BOLA = 5
 
 
+class Particula:
+    """Partículas quadradas retrô para efeito de impacto e faíscas."""
+    def __init__(self, x, y, vel_x, vel_y, tamanho, cor, vida_maxima):
+        self.x = float(x)
+        self.y = float(y)
+        self.vel_x = vel_x
+        self.vel_y = vel_y
+        self.tamanho = tamanho
+        self.cor = cor
+        self.vida = vida_maxima
+        self.vida_maxima = vida_maxima
+
+    def atualizar(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.vel_x *= 0.92  # Desaceleração suave no ar
+        self.vel_y *= 0.92
+        self.vida -= 1
+        return self.vida > 0
+
+    def desenhar(self, tela):
+        fator = max(0.0, self.vida / self.vida_maxima)
+        tam = max(1, int(self.tamanho * (0.4 + 0.6 * fator)))
+        cor_fade = (
+            int(self.cor[0] * fator),
+            int(self.cor[1] * fator),
+            int(self.cor[2] * fator)
+        )
+        pygame.draw.rect(tela, cor_fade, (int(self.x - tam // 2), int(self.y - tam // 2), tam, tam))
+
+
 class Botao:
     """Classe para renderização e interação com botões no Pygame."""
     def __init__(self, rect, texto, id_acao=None):
@@ -90,6 +121,7 @@ class PartidaFundo:
         self.vel_y = 0
         self.rastro = []
         self.max_rastro = 7
+        self.particulas = []
         self.reiniciar_bola()
 
         # Placar de fundo
@@ -106,6 +138,12 @@ class PartidaFundo:
         self.surf_overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
         self.surf_overlay.fill((8, 8, 12, 180))
 
+    def criar_impacto(self, x, y, dir_x, dir_y, cor, qtd=8):
+        for _ in range(qtd):
+            vx = dir_x * random.uniform(1.5, 3.8) + random.uniform(-1.5, 1.5)
+            vy = dir_y * random.uniform(1.5, 3.8) + random.uniform(-1.5, 1.5)
+            self.particulas.append(Particula(x, y, vx, vy, random.randint(2, 4), cor, random.randint(10, 18)))
+
     def reiniciar_bola(self):
         self.bola.center = (self.largura // 2, self.altura // 2)
         dir_x = random.choice([-1, 1])
@@ -114,8 +152,12 @@ class PartidaFundo:
         self.vel_x = dir_x * vel
         self.vel_y = dir_y * vel
         self.rastro.clear()
+        self.particulas.clear()
 
     def atualizar(self):
+        # Atualizar partículas do fundo
+        self.particulas = [p for p in self.particulas if p.atualizar()]
+
         if self.delay_ponto > 0:
             self.delay_ponto -= 1
             if self.delay_ponto == 0:
@@ -161,9 +203,11 @@ class PartidaFundo:
         if self.bola.top <= 0:
             self.bola.top = 0
             self.vel_y *= -1
+            self.criar_impacto(self.bola.centerx, self.bola.top, 0, 1, (200, 200, 200), qtd=6)
         elif self.bola.bottom >= self.altura:
             self.bola.bottom = self.altura
             self.vel_y *= -1
+            self.criar_impacto(self.bola.centerx, self.bola.bottom, 0, -1, (200, 200, 200), qtd=6)
 
         # Colisão com paletes
         if self.bola.colliderect(self.palete_esq) and self.vel_x < 0:
@@ -171,12 +215,14 @@ class PartidaFundo:
             self.vel_x = -self.vel_x * 1.03
             offset = (self.bola.centery - self.palete_esq.centery) / (self.palete_esq.height / 2)
             self.vel_y = offset * abs(self.vel_x)
+            self.criar_impacto(self.palete_esq.right, self.bola.centery, 1, 0, (220, 220, 220), qtd=8)
 
         if self.bola.colliderect(self.palete_dir) and self.vel_x > 0:
             self.bola.right = self.palete_dir.left
             self.vel_x = -self.vel_x * 1.03
             offset = (self.bola.centery - self.palete_dir.centery) / (self.palete_dir.height / 2)
             self.vel_y = offset * abs(self.vel_x)
+            self.criar_impacto(self.palete_dir.left, self.bola.centery, -1, 0, (220, 220, 220), qtd=8)
 
         # Limite de velocidade no fundo para jogadas fluidas e visíveis
         self.vel_x = max(-9, min(9, self.vel_x))
@@ -206,6 +252,10 @@ class PartidaFundo:
         # Paletes de fundo
         pygame.draw.rect(tela, cor_barras, self.palete_esq)
         pygame.draw.rect(tela, cor_barras, self.palete_dir)
+
+        # Partículas de impacto no fundo
+        for p in self.particulas:
+            p.desenhar(tela)
 
         # Rastro fantasma de fósforo retrô da bola
         qtd = len(self.rastro)
@@ -278,6 +328,18 @@ class PongGame:
         self.partida_fundo = PartidaFundo()
         self.rastro_bola_jogo = []
 
+        # Partículas retrô e tremor de tela (Screen Shake)
+        self.particulas = []
+        self.tempo_tremida = 0
+        self.intensidade_tremida = 0
+        self.shake_x = 0
+        self.shake_y = 0
+        self.superficie_jogo = pygame.Surface((LARGURA, ALTURA))
+
+        # Imprevisibilidade da IA (offset dinâmico do ponto de rebatida)
+        self.ia_offset_alvo = 0
+        self.sortear_estrategia_ia()
+
         # Controle da contagem regressiva de 3 segundos
         self.em_contagem = False
         self.tempo_inicio_contagem = 0
@@ -342,6 +404,30 @@ class PongGame:
         self.btn_voltar_opcoes = Botao(((LARGURA - 200) // 2, 530, 200, 42), "ESC - Voltar", "voltar")
         self.btn_voltar_como_jogar = Botao(((LARGURA - 200) // 2, 530, 200, 42), "ESC - Voltar", "voltar")
 
+    def sortear_estrategia_ia(self):
+        """Define onde na palete a IA tentará rebater a bola para criar ângulos variados e imprevisíveis."""
+        # A palete tem 90 pixels de altura (de -45 a +45 em relação ao centro).
+        # Escolhe offsets que geram rebatidas para cima, para baixo ou retas.
+        # Ex: -28 (rebate no topo, lança pra cima), +28 (rebate na base, lança pra baixo)
+        opcoes = [-32, -24, -14, 0, 14, 24, 32]
+        self.ia_offset_alvo = random.choice(opcoes) + random.uniform(-4, 4)
+
+    def ativar_tremida(self, intensidade=4, duracao=6):
+        """Ativa a leve tremida de impacto na tela."""
+        self.intensidade_tremida = intensidade
+        self.tempo_tremida = duracao
+
+    def criar_impacto(self, x, y, dir_x, dir_y, cor, qtd=12, shake_intensidade=4, shake_duracao=6):
+        """Gera partículas quadradas de impacto no ar e aciona a tremida de tela."""
+        self.ativar_tremida(shake_intensidade, shake_duracao)
+        for _ in range(qtd):
+            # Velocidade direcionada com dispersão
+            vx = dir_x * random.uniform(2.0, 5.0) + random.uniform(-1.8, 1.8)
+            vy = dir_y * random.uniform(2.0, 5.0) + random.uniform(-1.8, 1.8)
+            tam = random.randint(3, 5)
+            vida = random.randint(12, 22)
+            self.particulas.append(Particula(x, y, vx, vy, tam, cor, vida))
+
     def reiniciar_bola(self):
         """Reinicia a bola no centro da quadra com direção aleatória."""
         self.bola.center = (LARGURA // 2, ALTURA // 2)
@@ -350,6 +436,8 @@ class PongGame:
         self.vel_bola_x = direcao_x * VEL_INICIAL_BOLA
         self.vel_bola_y = direcao_y * VEL_INICIAL_BOLA
         self.rastro_bola_jogo = []
+        self.particulas.clear()
+        self.sortear_estrategia_ia()
 
     def iniciar_partida(self, modo=1):
         """Prepara o início da partida para 1 ou 2 jogadores com contagem regressiva de 3s."""
@@ -365,20 +453,23 @@ class PongGame:
         self.tempo_inicio_contagem = pygame.time.get_ticks()
         self.segundos_restantes = 3
         self.rastro_bola_jogo = []
+        self.particulas.clear()
+        self.sortear_estrategia_ia()
         self.estado = "JOGANDO"
 
     def iniciar_partida_2p(self):
         self.iniciar_partida(2)
 
     def atualizar_ia(self):
-        """Controla a palete direita com limites de velocidade e comportamento humanoide."""
+        """Controla a palete direita com limites de velocidade, ângulos imprevisíveis e comportamento humanoide."""
         # Se a bola está se movendo em direção à IA
         if self.vel_bola_x > 0:
-            alvo_y = self.bola.centery
-            diferenca = alvo_y - self.palete_dir.centery
+            # Ponto onde a IA deseja que a bola encoste na sua palete
+            ponto_alvo_palete = self.palete_dir.centery + self.ia_offset_alvo
+            diferenca = self.bola.centery - ponto_alvo_palete
 
-            # Zona morta de 10 pixels para evitar jitter
-            if abs(diferenca) > 10:
+            # Zona morta de 8 pixels para evitar jitter
+            if abs(diferenca) > 8:
                 if diferenca > 0:
                     movimento = min(VEL_IA, diferenca)
                     self.palete_dir.y += int(movimento)
@@ -584,6 +675,18 @@ class PongGame:
         if len(self.rastro_bola_jogo) > 6:
             self.rastro_bola_jogo.pop(0)
 
+        # Atualizar partículas de impacto
+        self.particulas = [p for p in self.particulas if p.atualizar()]
+
+        # Atualizar tremor de tela (Screen Shake)
+        if self.tempo_tremida > 0:
+            self.tempo_tremida -= 1
+            self.shake_x = random.randint(-self.intensidade_tremida, self.intensidade_tremida)
+            self.shake_y = random.randint(-self.intensidade_tremida, self.intensidade_tremida)
+        else:
+            self.shake_x = 0
+            self.shake_y = 0
+
         # Movimento da bola
         self.bola.x += int(self.vel_bola_x)
         self.bola.y += int(self.vel_bola_y)
@@ -592,9 +695,11 @@ class PongGame:
         if self.bola.top <= 0:
             self.bola.top = 0
             self.vel_bola_y *= -1
+            self.criar_impacto(self.bola.centerx, self.bola.top, 0, 1, self.cor_bola, qtd=10, shake_intensidade=3, shake_duracao=5)
         elif self.bola.bottom >= ALTURA:
             self.bola.bottom = ALTURA
             self.vel_bola_y *= -1
+            self.criar_impacto(self.bola.centerx, self.bola.bottom, 0, -1, self.cor_bola, qtd=10, shake_intensidade=3, shake_duracao=5)
 
         # Colisão com palete esquerda (ambas usam cor_barras)
         if self.bola.colliderect(self.palete_esq) and self.vel_bola_x < 0:
@@ -602,6 +707,8 @@ class PongGame:
             self.vel_bola_x = -self.vel_bola_x * 1.05
             offset = (self.bola.centery - self.palete_esq.centery) / (ALTURA_PALETE / 2)
             self.vel_bola_y = offset * abs(self.vel_bola_x)
+            self.sortear_estrategia_ia()
+            self.criar_impacto(self.palete_esq.right, self.bola.centery, 1, 0, self.cor_barras, qtd=14, shake_intensidade=4, shake_duracao=6)
 
         # Colisão com palete direita
         if self.bola.colliderect(self.palete_dir) and self.vel_bola_x > 0:
@@ -609,6 +716,7 @@ class PongGame:
             self.vel_bola_x = -self.vel_bola_x * 1.05
             offset = (self.bola.centery - self.palete_dir.centery) / (ALTURA_PALETE / 2)
             self.vel_bola_y = offset * abs(self.vel_bola_x)
+            self.criar_impacto(self.palete_dir.left, self.bola.centery, -1, 0, self.cor_barras, qtd=14, shake_intensidade=4, shake_duracao=6)
 
         # Limitar velocidade máxima para estabilidade física
         vel_maxima = 14
@@ -816,15 +924,21 @@ class PongGame:
         self.btn_voltar_como_jogar.desenhar(self.tela, self.fonte_botao)
 
     def desenhar_jogo(self):
-        """Renderiza a quadra de jogo com cores customizadas e contador."""
+        """Renderiza a quadra de jogo com cores customizadas, partículas e leve tremida de tela."""
+        self.superficie_jogo.fill(PRETO)
+
         # Rede pontilhada central (com a cor customizada da rede)
         passo = 15
         for y in range(0, ALTURA, passo * 2):
-            pygame.draw.rect(self.tela, self.cor_rede, (LARGURA // 2 - 2, y, 4, passo))
+            pygame.draw.rect(self.superficie_jogo, self.cor_rede, (LARGURA // 2 - 2, y, 4, passo))
 
         # Paletes (ambas compartilham a mesma cor customizada)
-        pygame.draw.rect(self.tela, self.cor_barras, self.palete_esq)
-        pygame.draw.rect(self.tela, self.cor_barras, self.palete_dir)
+        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_esq)
+        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_dir)
+
+        # Partículas de impacto no ar
+        for p in self.particulas:
+            p.desenhar(self.superficie_jogo)
 
         # Rastro retrô da bola (fantasma / efeito fósforo CRT)
         qtd = len(self.rastro_bola_jogo)
@@ -838,42 +952,42 @@ class PongGame:
             )
             rect_fantasma = pygame.Rect(0, 0, tam, tam)
             rect_fantasma.center = pos
-            pygame.draw.rect(self.tela, cor_fantasma, rect_fantasma)
+            pygame.draw.rect(self.superficie_jogo, cor_fantasma, rect_fantasma)
 
         # Bolinha quadrada clássica retrô
-        pygame.draw.rect(self.tela, self.cor_bola, self.bola)
+        pygame.draw.rect(self.superficie_jogo, self.cor_bola, self.bola)
 
         # Placar numérico
         texto_esq = self.fonte_placar.render(str(self.pontos_esq), True, BRANCO)
         texto_dir = self.fonte_placar.render(str(self.pontos_dir), True, BRANCO)
-        self.tela.blit(texto_esq, (LARGURA // 4 - texto_esq.get_width() // 2, 25))
-        self.tela.blit(texto_dir, (3 * LARGURA // 4 - texto_dir.get_width() // 2, 25))
+        self.superficie_jogo.blit(texto_esq, (LARGURA // 4 - texto_esq.get_width() // 2, 25))
+        self.superficie_jogo.blit(texto_dir, (3 * LARGURA // 4 - texto_dir.get_width() // 2, 25))
 
         # Rótulos dos jogadores no placar
         nome_esq = "JOGADOR 1" if self.modo_jogo == 2 else "VOCÊ"
         nome_dir = "JOGADOR 2" if self.modo_jogo == 2 else "CPU (IA)"
         lbl_esq = self.fonte_texto.render(nome_esq, True, CINZA_TEXTO)
         lbl_dir = self.fonte_texto.render(nome_dir, True, CINZA_TEXTO)
-        self.tela.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
-        self.tela.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
+        self.superficie_jogo.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
+        self.superficie_jogo.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
 
         # Contador de 3 segundos na tela antes de iniciar
         if self.em_contagem:
             # Caixa estilizada com número da contagem
             rect_box = pygame.Rect(LARGURA // 2 - 120, ALTURA // 2 - 90, 240, 180)
-            pygame.draw.rect(self.tela, (18, 18, 24), rect_box, border_radius=12)
-            pygame.draw.rect(self.tela, AMARELO, rect_box, width=3, border_radius=12)
+            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
+            pygame.draw.rect(self.superficie_jogo, AMARELO, rect_box, width=3, border_radius=12)
 
             txt_cont = self.fonte_contador.render(str(self.segundos_restantes), True, AMARELO)
             rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 - 15))
-            self.tela.blit(txt_cont, rect_cont)
+            self.superficie_jogo.blit(txt_cont, rect_cont)
 
             txt_prep = self.fonte_texto.render("PREPAREM-SE!", True, BRANCO)
             rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 + 55))
-            self.tela.blit(txt_prep, rect_prep)
+            self.superficie_jogo.blit(txt_prep, rect_prep)
 
         # Scanlines CRT retrô sobre o jogo
-        self.tela.blit(self.partida_fundo.surf_scanlines, (0, 0))
+        self.superficie_jogo.blit(self.partida_fundo.surf_scanlines, (0, 0))
 
         # Instruções no rodapé adaptadas ao modo
         if self.modo_jogo == 1:
@@ -882,7 +996,10 @@ class PongGame:
             texto_rodape = "P1: W/S | P2: Setas | R: Reiniciar | ESC: Menu Principal"
 
         instrucoes = self.fonte_texto.render(texto_rodape, True, CINZA_TEXTO)
-        self.tela.blit(instrucoes, (LARGURA // 2 - instrucoes.get_width() // 2, ALTURA - 25))
+        self.superficie_jogo.blit(instrucoes, (LARGURA // 2 - instrucoes.get_width() // 2, ALTURA - 25))
+
+        # Aplica a tremida na tela principal (Screen Shake)
+        self.tela.blit(self.superficie_jogo, (self.shake_x, self.shake_y))
 
     # ==========================================
     # LOOP PRINCIPAL

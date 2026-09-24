@@ -53,7 +53,9 @@ python main.py
 ## 🎮 Menus e Funcionalidades
 
 - **Partida de Fundo Retrô nos Menus:** Enquanto navega por qualquer menu (Abertura, Principal, Jogar, Opções e Como Jogar), uma partida autônoma de Pong (IA vs IA) acontece em segundo plano, com paletes animadas rebatendo a bolinha e marcando pontos em tempo real.
-- **Estética Retrô CRT:**
+- **Estética Retrô CRT & Impactos Dinâmicos:**
+  - **Partículas Quadradas de Impacto:** A cada colisão da bola com as paredes superior/inferior ou com as paletes, pequenas partículas quadradas explodem na direção do impacto e se dissolvem suavemente no ar.
+  - **Tremor de Tela (Screen Shake):** Leve tremor na tela a cada colisão que traz peso e sensação física aos lances.
   - **Scanlines:** Linhas horizontais sutis simulam monitores de tubo (CRT) e arcades clássicos dos anos 70/80.
   - **Rastro de Fósforo (Ghosting):** A bolinha deixa um rastro de persistência luminosa e movimento fluido.
   - **Pixel Art Clássico:** Bolinha quadrada clássica do Pong original e rede pontilhada retrô.
@@ -61,7 +63,7 @@ python main.py
 - **Tela de Abertura:** Moldura retrô com título "Pong Clone" em destaque e aviso interativo *"Aperte qualquer tecla para iniciar"*.
 - **Menu Principal:**
   - `1 - Jogar`: Submenu com opções para:
-    - **1 Jogador (vs IA):** Enfrente a CPU com inteligência artificial humanizada e limite de velocidade (balanceada para ser desafiadora, mas não invencível).
+    - **1 Jogador (vs IA):** Enfrente a CPU com inteligência artificial humanizada, **rebatidas imprevisíveis com ângulos variados** (a CPU varia propositalmente o ponto de contato na palete para lançar diagonais altas, baixas e retas) e limite de velocidade balanceado.
     - **2 Jogadores:** Partida clássica local para dois jogadores no mesmo teclado.
   - `2 - Opções`: Personalização de cores exclusivas para as **Barras** (ambas compartilham a mesma cor), **Bolinha** e **Rede Central**, com prévia em tempo real!
   - `3 - Como Jogar`: Tela com os controles e regras detalhadas do jogo.
