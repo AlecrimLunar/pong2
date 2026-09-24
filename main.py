@@ -282,22 +282,93 @@ class PartidaFundo:
         tela.blit(self.surf_scanlines, (0, 0))
 
 
+def carregar_sistema_fontes():
+    """Inicializa o sistema de renderização de fontes com suporte a fallback (pygame.font -> pygame.freetype -> DummyFont)."""
+    global pygame
+    # 1. Tentar pygame.font padrão (SDL_ttf)
+    try:
+        if hasattr(pygame, "font") and pygame.font:
+            pygame.font.init()
+            if pygame.font.get_init():
+                def criar_fonte_font(nome, tamanho, bold=False):
+                    try:
+                        return pygame.font.SysFont(nome, tamanho, bold=bold)
+                    except Exception:
+                        return pygame.font.Font(None, tamanho)
+                return criar_fonte_font
+    except Exception as e:
+        print(f"[Aviso] pygame.font indisponível ({e}). Tentando fallback para pygame.freetype...")
+
+    # 2. Tentar pygame.freetype (FreeType nativo da SDL2)
+    try:
+        import pygame.freetype
+        pygame.freetype.init()
+
+        class FreetypeWrapper:
+            """Wrapper para compatibilizar a API do pygame.freetype com pygame.font.Font."""
+            def __init__(self, ft_font):
+                self._font = ft_font
+
+            def render(self, text, antialias, color, background=None):
+                surf, _ = self._font.render(str(text), color, bgcolor=background)
+                return surf
+
+            def size(self, text):
+                rect = self._font.get_rect(str(text))
+                return (rect.width, rect.height)
+
+        def criar_fonte_freetype(nome, tamanho, bold=False):
+            try:
+                ft = pygame.freetype.SysFont(nome, tamanho, bold=bold)
+            except Exception:
+                ft = pygame.freetype.Font(None, tamanho)
+            return FreetypeWrapper(ft)
+
+        print("[Info] pygame.freetype ativado com sucesso como mecanismo de fontes!")
+        return criar_fonte_freetype
+    except Exception as e:
+        print(f"[Aviso] pygame.freetype também indisponível: {e}")
+
+    # 3. Fallback de emergência (caso nenhuma biblioteca de fontes exista no Linux)
+    print("\n" + "=" * 65)
+    print("[ERRO DE AMBIENTE] Nenhuma biblioteca de fontes do SDL instalada no sistema.")
+    print("Para corrigir no Linux (Ubuntu/Debian), execute:")
+    print("  sudo apt update && sudo apt install libsdl2-ttf-dev")
+    print("  pip uninstall -y pygame && pip install --no-cache-dir pygame")
+    print("=" * 65 + "\n")
+
+    class DummyFont:
+        def __init__(self, tamanho=20):
+            self.tamanho = tamanho
+
+        def render(self, text, antialias, color, background=None):
+            largura = max(len(str(text)) * int(self.tamanho * 0.6), 10)
+            altura = max(int(self.tamanho * 1.2), 10)
+            surf = pygame.Surface((largura, altura), pygame.SRCALPHA)
+            return surf
+
+        def size(self, text):
+            return (len(str(text)) * int(self.tamanho * 0.6), int(self.tamanho * 1.2))
+
+    return lambda nome, tamanho, bold=False: DummyFont(tamanho)
+
+
 class PongGame:
     def __init__(self):
         pygame.init()
-        pygame.font.init()
+        criar_fonte = carregar_sistema_fontes()
         self.tela = pygame.display.set_mode((LARGURA, ALTURA))
         pygame.display.set_caption(TITULO)
         self.relogio = pygame.time.Clock()
 
         # Fontes do sistema (tamanhos ajustados para perfeita diagramação na tela)
-        self.fonte_titulo = pygame.font.SysFont("consolas", 56, bold=True)
-        self.fonte_subtitulo = pygame.font.SysFont("consolas", 28, bold=True)
-        self.fonte_botao = pygame.font.SysFont("consolas", 22, bold=True)
-        self.fonte_aba = pygame.font.SysFont("consolas", 20, bold=True)
-        self.fonte_texto = pygame.font.SysFont("consolas", 16)
-        self.fonte_contador = pygame.font.SysFont("consolas", 84, bold=True)
-        self.fonte_placar = pygame.font.SysFont("consolas", 48, bold=True)
+        self.fonte_titulo = criar_fonte("consolas", 56, bold=True)
+        self.fonte_subtitulo = criar_fonte("consolas", 28, bold=True)
+        self.fonte_botao = criar_fonte("consolas", 22, bold=True)
+        self.fonte_aba = criar_fonte("consolas", 20, bold=True)
+        self.fonte_texto = criar_fonte("consolas", 16)
+        self.fonte_contador = criar_fonte("consolas", 84, bold=True)
+        self.fonte_placar = criar_fonte("consolas", 48, bold=True)
 
         # Estados: SPLASH, MENU_PRINCIPAL, MENU_JOGAR, MENU_OPCOES, MENU_COMO_JOGAR, JOGANDO
         self.estado = "SPLASH"
