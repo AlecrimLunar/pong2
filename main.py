@@ -351,6 +351,7 @@ class PongGame:
         self.em_contagem_ponto = False
         self.tempo_inicio_ponto = 0
         self.segundos_restantes_ponto = 2
+        self.ultimo_marcador = "esq"
 
         # Sistema de Áudio e Controle de Volume
         self.volume = 0.7  # 70% de volume inicial
@@ -370,6 +371,8 @@ class PongGame:
         self.som_botao = None
         self.som_impacto = None
         self.som_contagem_3s = None
+        self.som_yourself_point = None
+        self.som_enemy_point = None
         self.caminho_musica_menu = None
         self.caminho_musica_partida = None
         self.musica_atual = None
@@ -399,6 +402,8 @@ class PongGame:
         self.som_botao = carregar_efeito("button_sound.mp3")
         self.som_impacto = carregar_efeito("ball_hit.mp3")
         self.som_contagem_3s = carregar_efeito("3_seg_sound.mp3")
+        self.som_yourself_point = carregar_efeito("yourself_point.mp3")
+        self.som_enemy_point = carregar_efeito("enemy_point.mp3")
 
         c_menu = os.path.join(caminho_sons, "menu_sound.mp3")
         if os.path.exists(c_menu):
@@ -420,6 +425,10 @@ class PongGame:
                     self.som_impacto.set_volume(self.volume)
                 if self.som_contagem_3s:
                     self.som_contagem_3s.set_volume(self.volume)
+                if self.som_yourself_point:
+                    self.som_yourself_point.set_volume(self.volume)
+                if self.som_enemy_point:
+                    self.som_enemy_point.set_volume(self.volume)
             except Exception:
                 pass
 
@@ -565,16 +574,28 @@ class PongGame:
         self.particulas.clear()
         self.sortear_estrategia_ia()
 
-    def iniciar_contagem_ponto(self):
-        """Inicia a pausa e contagem regressiva de 2 segundos após um ponto marcado."""
+    def iniciar_contagem_ponto(self, lado_marcador="esq"):
+        """Inicia a pausa e contagem regressiva de 2 segundos após um ponto marcado e toca o som correspondente."""
         self.em_contagem_ponto = True
         self.tempo_inicio_ponto = pygame.time.get_ticks()
         self.segundos_restantes_ponto = 2
+        self.ultimo_marcador = lado_marcador
         self.bola.center = (LARGURA // 2, ALTURA // 2)
         self.vel_bola_x = 0
         self.vel_bola_y = 0
         self.rastro_bola_jogo.clear()
         self.particulas.clear()
+
+        # Áudio do ponto:
+        # Modo 1 Jogador: yourself_point para gol do usuário ('esq') e enemy_point para gol da CPU ('dir').
+        # Modo 2 Jogadores: yourself_point para ambos os jogadores (Player 1 e Player 2).
+        if self.modo_jogo == 1:
+            if lado_marcador == "esq":
+                self.tocar_som(self.som_yourself_point)
+            else:
+                self.tocar_som(self.som_enemy_point)
+        else:
+            self.tocar_som(self.som_yourself_point)
 
     def iniciar_partida(self, modo=1):
         """Prepara o início da partida para 1 ou 2 jogadores com contagem regressiva de 3s."""
@@ -923,10 +944,10 @@ class PongGame:
         # Pontuação: aciona contagem regressiva de 2 segundos para o próximo saque
         if self.bola.left <= 0:
             self.pontos_dir += 1
-            self.iniciar_contagem_ponto()
+            self.iniciar_contagem_ponto(lado_marcador="dir")
         elif self.bola.right >= LARGURA:
             self.pontos_esq += 1
-            self.iniciar_contagem_ponto()
+            self.iniciar_contagem_ponto(lado_marcador="esq")
 
     # ==========================================
     # RENDERIZAÇÃO
@@ -1205,11 +1226,24 @@ class PongGame:
 
         # Contador de 2 segundos após marcação de ponto
         elif self.em_contagem_ponto:
-            rect_box = pygame.Rect(LARGURA // 2 - 130, ALTURA // 2 - 90, 260, 180)
-            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
-            pygame.draw.rect(self.superficie_jogo, VERDE_DESTAQUE, rect_box, width=3, border_radius=12)
+            rect_box = pygame.Rect(LARGURA // 2 - 140, ALTURA // 2 - 95, 280, 190)
 
-            txt_ponto = self.fonte_subtitulo.render("PONTO!", True, VERDE_DESTAQUE)
+            # Estilo e texto personalizados de acordo com quem pontuou
+            if self.modo_jogo == 1:
+                if self.ultimo_marcador == "esq":
+                    cor_borda = VERDE_DESTAQUE
+                    txt_titulo = "SEU PONTO!"
+                else:
+                    cor_borda = (235, 75, 75)
+                    txt_titulo = "PONTO DA CPU!"
+            else:
+                cor_borda = AMARELO
+                txt_titulo = "PONTO: JOGADOR 1" if self.ultimo_marcador == "esq" else "PONTO: JOGADOR 2"
+
+            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
+            pygame.draw.rect(self.superficie_jogo, cor_borda, rect_box, width=3, border_radius=12)
+
+            txt_ponto = self.fonte_subtitulo.render(txt_titulo, True, cor_borda)
             rect_ponto = txt_ponto.get_rect(center=(LARGURA // 2, ALTURA // 2 - 50))
             self.superficie_jogo.blit(txt_ponto, rect_ponto)
 
@@ -1218,7 +1252,7 @@ class PongGame:
             self.superficie_jogo.blit(txt_cont, rect_cont)
 
             txt_prox = self.fonte_texto.render("Próxima bola em...", True, BRANCO)
-            rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 60))
+            rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 62))
             self.superficie_jogo.blit(txt_prox, rect_prox)
 
         # Scanlines CRT retrô sobre o jogo

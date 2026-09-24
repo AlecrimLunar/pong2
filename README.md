@@ -59,6 +59,8 @@ python main.py
   - `3_seg_sound.mp3`: Som narrativo de contagem regressiva de 3 segundos para início da partida.
   - `ball_hit.mp3`: Efeito sonoro retrô a cada rebatida da bola nas paletes e colisão com paredes.
   - `button_sound.mp3`: Som de feedback ao clicar em botões, abas ou navegar pelo teclado.
+  - `yourself_point.mp3`: Som vibrante de gol para quando você marca ponto (Modo 1P) ou quando qualquer um dos jogadores pontua (Modo 2P).
+  - `enemy_point.mp3`: Som de ponto sofrido quando a CPU marca um gol contra o jogador (Modo 1P).
 - **Controle Interativo de Volume nas Opções:**
   - Slider interativo com porcentagem visual em tempo real (0% a 100%).
   - Ajustável via botões `[-]` e `[+]`, clique/arrasto direto do mouse na barra ou teclas de seta `[Esquerda]` / `[Direita]`.
@@ -123,6 +125,8 @@ python main.py
     ├── 3_seg_sound.mp3   # Áudio da contagem de 3 segundos
     ├── ball_hit.mp3      # Som de impacto da bolinha
     ├── button_sound.mp3  # Som de clique dos botões e menus
+    ├── enemy_point.mp3   # Som de gol marcado pela CPU
     ├── menu_sound.mp3    # Música ambiente dos menus
-    └── partida_sound.mp3 # Trilha sonora durante as partidas
+    ├── partida_sound.mp3 # Trilha sonora durante as partidas
+    └── yourself_point.mp3# Som de gol marcado por você ou pelos jogadores
 ```
