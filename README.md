@@ -54,19 +54,21 @@ python main.py
 
 - **Tela de Abertura:** Nome "Pong Clone" em destaque com aviso interativo *"Aperte qualquer tecla para iniciar"*.
 - **Menu Principal:**
-  - `1 - Jogar`: Submenu com opções para **1 Jogador** (aviso de modo em desenvolvimento) e **2 Jogadores**.
+  - `1 - Jogar`: Submenu com opções para:
+    - **1 Jogador (vs IA):** Enfrente a CPU com inteligência artificial humanizada e limite de velocidade (balanceada para ser desafiadora, mas não invencível).
+    - **2 Jogadores:** Partida clássica local para dois jogadores no mesmo teclado.
   - `2 - Opções`: Personalização de cores exclusivas para as **Barras** (ambas compartilham a mesma cor), **Bolinha** e **Rede Central**, com prévia em tempo real!
   - `3 - Como Jogar`: Tela com os controles e regras detalhadas do jogo.
   - `4 - Sair`: Encerra o jogo.
-- **Contagem Regressiva de 3 Segundos:** Ao iniciar uma partida de 2 jogadores, um contador de 3 segundos aparece no centro para os jogadores se posicionarem antes da bola começar a se mover.
+- **Contagem Regressiva de 3 Segundos:** Ao iniciar qualquer partida (1P ou 2P), um contador de 3 segundos aparece no centro para os jogadores se posicionarem antes da bola começar a se mover.
 
 ---
 
 ## ⌨️ Controles
 
 - **Navegação pelos Menus:** Mouse (cliques nos botões e cores) ou teclado (`1`, `2`, `3`, `4` e `ESC` para voltar).
-- **Jogador 1 (Esquerda):** `W` (Cima) / `S` (Baixo)
-- **Jogador 2 (Direita):** `Seta para Cima` / `Seta para Baixo`
+- **Jogador 1 / Você (Esquerda):** `W` (Cima) / `S` (Baixo)
+- **Jogador 2 / CPU (Direita):** `Seta para Cima` / `Seta para Baixo` (no modo 2P) ou controlado pela IA (no modo 1P)
 - **Reiniciar Partida:** Tecla `R`
 - **Voltar ao Menu / Pausar:** Tecla `ESC`
 

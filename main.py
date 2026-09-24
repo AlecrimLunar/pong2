@@ -37,6 +37,7 @@ CORES_PRESET = [
 LARGURA_PALETE = 15
 ALTURA_PALETE = 90
 VEL_PALETE = 6
+VEL_IA = 4.5  # Limite de velocidade da IA para não ser invencível
 
 TAMANHO_BOLA = 15
 VEL_INICIAL_BOLA = 5
@@ -111,6 +112,9 @@ class PongGame:
         self.pontos_esq = 0
         self.pontos_dir = 0
 
+        # Modo de jogo: 1 (1 Jogador vs IA), 2 (2 Jogadores)
+        self.modo_jogo = 1
+
         # Controle da contagem regressiva de 3 segundos
         self.em_contagem = False
         self.tempo_inicio_contagem = 0
@@ -183,8 +187,9 @@ class PongGame:
         self.vel_bola_x = direcao_x * VEL_INICIAL_BOLA
         self.vel_bola_y = direcao_y * VEL_INICIAL_BOLA
 
-    def iniciar_partida_2p(self):
-        """Prepara o início da partida para 2 jogadores com contagem regressiva de 3s."""
+    def iniciar_partida(self, modo=1):
+        """Prepara o início da partida para 1 ou 2 jogadores com contagem regressiva de 3s."""
+        self.modo_jogo = modo
         self.pontos_esq = 0
         self.pontos_dir = 0
         self.palete_esq.centery = ALTURA // 2
@@ -196,6 +201,41 @@ class PongGame:
         self.tempo_inicio_contagem = pygame.time.get_ticks()
         self.segundos_restantes = 3
         self.estado = "JOGANDO"
+
+    def iniciar_partida_2p(self):
+        self.iniciar_partida(2)
+
+    def atualizar_ia(self):
+        """Controla a palete direita com limites de velocidade e comportamento humanoide."""
+        # Se a bola está se movendo em direção à IA
+        if self.vel_bola_x > 0:
+            alvo_y = self.bola.centery
+            diferenca = alvo_y - self.palete_dir.centery
+
+            # Zona morta de 10 pixels para evitar jitter
+            if abs(diferenca) > 10:
+                if diferenca > 0:
+                    movimento = min(VEL_IA, diferenca)
+                    self.palete_dir.y += int(movimento)
+                else:
+                    movimento = max(-VEL_IA, diferenca)
+                    self.palete_dir.y += int(movimento)
+        else:
+            # Quando a bola está indo embora, a IA reposiciona-se suavemente para o centro da quadra
+            centro_quadra = ALTURA // 2
+            diferenca = centro_quadra - self.palete_dir.centery
+            if abs(diferenca) > 15:
+                vel_retorno = 2.5
+                if diferenca > 0:
+                    self.palete_dir.y += int(min(vel_retorno, diferenca))
+                else:
+                    self.palete_dir.y += int(max(-vel_retorno, diferenca))
+
+        # Manter a palete dentro da tela
+        if self.palete_dir.top < 0:
+            self.palete_dir.top = 0
+        elif self.palete_dir.bottom > ALTURA:
+            self.palete_dir.bottom = ALTURA
 
     def definir_cor_elemento(self, cor_rgb):
         """Aplica a cor selecionada ao elemento ativo nas opções."""
@@ -276,19 +316,17 @@ class PongGame:
                     for btn in self.botoes_menu_jogar:
                         if btn.foi_clicado(pos_mouse):
                             if btn.id_acao == "1_jogador":
-                                self.mensagem_aviso = "Modo 1 Jogador em desenvolvimento! Escolha '2 Jogadores'."
-                                self.tempo_aviso = pygame.time.get_ticks()
+                                self.iniciar_partida(1)
                             elif btn.id_acao == "2_jogadores":
-                                self.iniciar_partida_2p()
+                                self.iniciar_partida(2)
                             elif btn.id_acao == "voltar":
                                 self.estado = "MENU_PRINCIPAL"
 
                 elif evento.type == pygame.KEYDOWN:
                     if evento.key in (pygame.K_1, pygame.K_KP1):
-                        self.mensagem_aviso = "Modo 1 Jogador em desenvolvimento! Escolha '2 Jogadores'."
-                        self.tempo_aviso = pygame.time.get_ticks()
+                        self.iniciar_partida(1)
                     elif evento.key in (pygame.K_2, pygame.K_KP2):
-                        self.iniciar_partida_2p()
+                        self.iniciar_partida(2)
                     elif evento.key == pygame.K_ESCAPE:
                         self.estado = "MENU_PRINCIPAL"
 
@@ -335,7 +373,7 @@ class PongGame:
                     if evento.key == pygame.K_ESCAPE:
                         self.estado = "MENU_PRINCIPAL"
                     elif evento.key == pygame.K_r:
-                        self.iniciar_partida_2p()
+                        self.iniciar_partida(self.modo_jogo)
 
         return True
 
@@ -348,16 +386,21 @@ class PongGame:
 
         teclas = pygame.key.get_pressed()
 
-        # Os jogadores podem movimentar as paletes para se posicionar mesmo na contagem
+        # Jogador 1 (Humano - W / S)
         if teclas[pygame.K_w] and self.palete_esq.top > 0:
             self.palete_esq.y -= VEL_PALETE
         if teclas[pygame.K_s] and self.palete_esq.bottom < ALTURA:
             self.palete_esq.y += VEL_PALETE
 
-        if teclas[pygame.K_UP] and self.palete_dir.top > 0:
-            self.palete_dir.y -= VEL_PALETE
-        if teclas[pygame.K_DOWN] and self.palete_dir.bottom < ALTURA:
-            self.palete_dir.y += VEL_PALETE
+        # Lado Direito: Jogador 2 humano ou IA
+        if self.modo_jogo == 2:
+            if teclas[pygame.K_UP] and self.palete_dir.top > 0:
+                self.palete_dir.y -= VEL_PALETE
+            if teclas[pygame.K_DOWN] and self.palete_dir.bottom < ALTURA:
+                self.palete_dir.y += VEL_PALETE
+        else:
+            # Modo 1 Jogador: IA defende com velocidade limitada
+            self.atualizar_ia()
 
         # Lógica da Contagem Regressiva de 3 segundos
         if self.em_contagem:
@@ -556,9 +599,9 @@ class PongGame:
         self.tela.blit(tit1, (rect_card1.x + 20, rect_card1.y + 12))
 
         linhas_controles = [
-            "• Jogador 1 (Esquerda) : [ W ] para Cima  |  [ S ] para Baixo",
-            "• Jogador 2 (Direita)  : [ Seta Cima ]     |  [ Seta Baixo ]",
-            "• Tecla [ R ]          : Reiniciar partida e contagem",
+            "• Modo 1 Jogador       : Você (W / S) contra a CPU (IA com velocidade limitada)",
+            "• Modo 2 Jogadores     : Jogador 1 (W / S) vs Jogador 2 (Setas Cima / Baixo)",
+            "• Tecla [ R ]          : Reiniciar partida e contagem de 3 segundos",
             "• Tecla [ ESC ]        : Voltar ao Menu Principal",
         ]
         y_c1 = rect_card1.y + 48
@@ -581,7 +624,7 @@ class PongGame:
             "3. Se a bola passar da defesa adversária, você ganha 1 ponto!",
             "4. A bola ganha velocidade a cada rebatida bem-sucedida.",
             "5. O ângulo de retorno da bola depende do ponto de impacto na palete.",
-            "6. A bola rebate nas paredes superior e inferior da quadra.",
+            "6. A IA possui limite de velocidade, permitindo que você a vença com jogadas rápidas!",
         ]
         y_c2 = rect_card2.y + 48
         for linha in linhas_regras:
@@ -606,11 +649,19 @@ class PongGame:
         # Bolinha (com a cor customizada da bola)
         pygame.draw.ellipse(self.tela, self.cor_bola, self.bola)
 
-        # Placar
+        # Placar numérico
         texto_esq = self.fonte_placar.render(str(self.pontos_esq), True, BRANCO)
         texto_dir = self.fonte_placar.render(str(self.pontos_dir), True, BRANCO)
         self.tela.blit(texto_esq, (LARGURA // 4 - texto_esq.get_width() // 2, 25))
         self.tela.blit(texto_dir, (3 * LARGURA // 4 - texto_dir.get_width() // 2, 25))
+
+        # Rótulos dos jogadores no placar
+        nome_esq = "JOGADOR 1" if self.modo_jogo == 2 else "VOCÊ"
+        nome_dir = "JOGADOR 2" if self.modo_jogo == 2 else "CPU (IA)"
+        lbl_esq = self.fonte_texto.render(nome_esq, True, CINZA_TEXTO)
+        lbl_dir = self.fonte_texto.render(nome_dir, True, CINZA_TEXTO)
+        self.tela.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
+        self.tela.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
 
         # Contador de 3 segundos na tela antes de iniciar
         if self.em_contagem:
@@ -627,8 +678,13 @@ class PongGame:
             rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 + 55))
             self.tela.blit(txt_prep, rect_prep)
 
-        # Instruções no rodapé
-        instrucoes = self.fonte_texto.render("P1: W/S | P2: Setas | R: Reiniciar | ESC: Menu Principal", True, CINZA_TEXTO)
+        # Instruções no rodapé adaptadas ao modo
+        if self.modo_jogo == 1:
+            texto_rodape = "Você: W/S | Oponente: CPU (IA) | R: Reiniciar | ESC: Menu Principal"
+        else:
+            texto_rodape = "P1: W/S | P2: Setas | R: Reiniciar | ESC: Menu Principal"
+
+        instrucoes = self.fonte_texto.render(texto_rodape, True, CINZA_TEXTO)
         self.tela.blit(instrucoes, (LARGURA // 2 - instrucoes.get_width() // 2, ALTURA - 25))
 
     # ==========================================
