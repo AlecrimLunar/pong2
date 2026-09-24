@@ -52,7 +52,13 @@ python main.py
 
 ## 🎮 Menus e Funcionalidades
 
-- **Tela de Abertura:** Nome "Pong Clone" em destaque com aviso interativo *"Aperte qualquer tecla para iniciar"*.
+- **Partida de Fundo Retrô nos Menus:** Enquanto navega por qualquer menu (Abertura, Principal, Jogar, Opções e Como Jogar), uma partida autônoma de Pong (IA vs IA) acontece em segundo plano, com paletes animadas rebatendo a bolinha e marcando pontos em tempo real.
+- **Estética Retrô CRT:**
+  - **Scanlines:** Linhas horizontais sutis simulam monitores de tubo (CRT) e arcades clássicos dos anos 70/80.
+  - **Rastro de Fósforo (Ghosting):** A bolinha deixa um rastro de persistência luminosa e movimento fluido.
+  - **Pixel Art Clássico:** Bolinha quadrada clássica do Pong original e rede pontilhada retrô.
+  - **Camada de Contraste:** O jogo de fundo possui escurecimento suave para manter os botões e textos em primeiro plano com legibilidade perfeita.
+- **Tela de Abertura:** Moldura retrô com título "Pong Clone" em destaque e aviso interativo *"Aperte qualquer tecla para iniciar"*.
 - **Menu Principal:**
   - `1 - Jogar`: Submenu com opções para:
     - **1 Jogador (vs IA):** Enfrente a CPU com inteligência artificial humanizada e limite de velocidade (balanceada para ser desafiadora, mas não invencível).

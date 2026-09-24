@@ -69,7 +69,163 @@ class Botao:
 
         surface_txt = fonte.render(self.texto, True, txt_cor)
         rect_txt = surface_txt.get_rect(center=self.rect.center)
-        tela.blit(surface_txt, rect_txt)
+class PartidaFundo:
+    """Simulação autônoma de Pong para rodar no fundo dos menus com estilo retrô CRT."""
+    def __init__(self):
+        self.largura = LARGURA
+        self.altura = ALTURA
+
+        # Paletes de fundo
+        self.palete_esq = pygame.Rect(20, (ALTURA - 90) // 2, 14, 90)
+        self.palete_dir = pygame.Rect(LARGURA - 34, (ALTURA - 90) // 2, 14, 90)
+        self.vel_ia = 4.3
+
+        # Bola de fundo (quadrada retrô)
+        self.tamanho_bola = 14
+        self.bola = pygame.Rect((LARGURA - self.tamanho_bola) // 2, (ALTURA - self.tamanho_bola) // 2, self.tamanho_bola, self.tamanho_bola)
+        self.vel_x = 0
+        self.vel_y = 0
+        self.rastro = []
+        self.max_rastro = 7
+        self.reiniciar_bola()
+
+        # Placar de fundo
+        self.pontos_esq = 0
+        self.pontos_dir = 0
+        self.delay_ponto = 0
+
+        # Superfície de Scanlines CRT retrô
+        self.surf_scanlines = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+        for y in range(0, ALTURA, 3):
+            pygame.draw.line(self.surf_scanlines, (0, 0, 0, 75), (0, y), (LARGURA, y), 1)
+
+        # Superfície de escurecimento suave para os menus da frente terem leitura perfeita
+        self.surf_overlay = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+        self.surf_overlay.fill((8, 8, 12, 180))
+
+    def reiniciar_bola(self):
+        self.bola.center = (self.largura // 2, self.altura // 2)
+        dir_x = random.choice([-1, 1])
+        dir_y = random.choice([-0.75, -0.4, 0.4, 0.75])
+        vel = 5.2
+        self.vel_x = dir_x * vel
+        self.vel_y = dir_y * vel
+        self.rastro.clear()
+
+    def atualizar(self):
+        if self.delay_ponto > 0:
+            self.delay_ponto -= 1
+            if self.delay_ponto == 0:
+                self.reiniciar_bola()
+            return
+
+        # Registrar rastro de movimento (efeito ghosting de fósforo CRT)
+        self.rastro.append(self.bola.center)
+        if len(self.rastro) > self.max_rastro:
+            self.rastro.pop(0)
+
+        # Movimento inteligente da palete esquerda no fundo
+        if self.vel_x < 0:
+            alvo = self.bola.centery
+            diff = alvo - self.palete_esq.centery
+            if abs(diff) > 8:
+                self.palete_esq.y += int(min(self.vel_ia, diff) if diff > 0 else max(-self.vel_ia, diff))
+        else:
+            diff_centro = (self.altura // 2) - self.palete_esq.centery
+            if abs(diff_centro) > 12:
+                self.palete_esq.y += int(min(2.0, diff_centro) if diff_centro > 0 else max(-2.0, diff_centro))
+
+        # Movimento inteligente da palete direita no fundo
+        if self.vel_x > 0:
+            alvo = self.bola.centery
+            diff = alvo - self.palete_dir.centery
+            if abs(diff) > 8:
+                self.palete_dir.y += int(min(self.vel_ia, diff) if diff > 0 else max(-self.vel_ia, diff))
+        else:
+            diff_centro = (self.altura // 2) - self.palete_dir.centery
+            if abs(diff_centro) > 12:
+                self.palete_dir.y += int(min(2.0, diff_centro) if diff_centro > 0 else max(-2.0, diff_centro))
+
+        # Limitar dentro da tela
+        self.palete_esq.top = max(0, min(self.altura - self.palete_esq.height, self.palete_esq.top))
+        self.palete_dir.top = max(0, min(self.altura - self.palete_dir.height, self.palete_dir.top))
+
+        # Mover a bola
+        self.bola.x += int(self.vel_x)
+        self.bola.y += int(self.vel_y)
+
+        # Colisões com as bordas
+        if self.bola.top <= 0:
+            self.bola.top = 0
+            self.vel_y *= -1
+        elif self.bola.bottom >= self.altura:
+            self.bola.bottom = self.altura
+            self.vel_y *= -1
+
+        # Colisão com paletes
+        if self.bola.colliderect(self.palete_esq) and self.vel_x < 0:
+            self.bola.left = self.palete_esq.right
+            self.vel_x = -self.vel_x * 1.03
+            offset = (self.bola.centery - self.palete_esq.centery) / (self.palete_esq.height / 2)
+            self.vel_y = offset * abs(self.vel_x)
+
+        if self.bola.colliderect(self.palete_dir) and self.vel_x > 0:
+            self.bola.right = self.palete_dir.left
+            self.vel_x = -self.vel_x * 1.03
+            offset = (self.bola.centery - self.palete_dir.centery) / (self.palete_dir.height / 2)
+            self.vel_y = offset * abs(self.vel_x)
+
+        # Limite de velocidade no fundo para jogadas fluidas e visíveis
+        self.vel_x = max(-9, min(9, self.vel_x))
+        self.vel_y = max(-9, min(9, self.vel_y))
+
+        # Pontuação
+        if self.bola.left <= 0:
+            self.pontos_dir += 1
+            self.delay_ponto = 20
+        elif self.bola.right >= self.largura:
+            self.pontos_esq += 1
+            self.delay_ponto = 20
+
+    def desenhar(self, tela, cor_barras, cor_bola, cor_rede, fonte_placar):
+        # Linha pontilhada retrô no centro
+        passo = 15
+        for y in range(0, self.altura, passo * 2):
+            pygame.draw.rect(tela, cor_rede, (self.largura // 2 - 2, y, 4, passo))
+
+        # Placar retrô de fundo
+        placar_cor = (max(20, cor_barras[0] // 2), max(20, cor_barras[1] // 2), max(20, cor_barras[2] // 2))
+        txt_esq = fonte_placar.render(str(self.pontos_esq), True, placar_cor)
+        txt_dir = fonte_placar.render(str(self.pontos_dir), True, placar_cor)
+        tela.blit(txt_esq, (self.largura // 4 - txt_esq.get_width() // 2, 25))
+        tela.blit(txt_dir, (3 * self.largura // 4 - txt_dir.get_width() // 2, 25))
+
+        # Paletes de fundo
+        pygame.draw.rect(tela, cor_barras, self.palete_esq)
+        pygame.draw.rect(tela, cor_barras, self.palete_dir)
+
+        # Rastro fantasma de fósforo retrô da bola
+        qtd = len(self.rastro)
+        for i, pos in enumerate(self.rastro):
+            fator = (i + 1) / (qtd + 1)
+            tam = max(4, int(self.tamanho_bola * (0.35 + 0.65 * fator)))
+            cor_rastro = (
+                int(cor_bola[0] * fator * 0.7),
+                int(cor_bola[1] * fator * 0.7),
+                int(cor_bola[2] * fator * 0.7)
+            )
+            rect_r = pygame.Rect(0, 0, tam, tam)
+            rect_r.center = pos
+            pygame.draw.rect(tela, cor_rastro, rect_r)
+
+        # Bola quadrada retrô no fundo
+        pygame.draw.rect(tela, cor_bola, self.bola)
+
+        # Escurecimento suave para os botões do menu ficarem perfeitamente legíveis
+        tela.blit(self.surf_overlay, (0, 0))
+
+        # Scanlines CRT retrô
+        tela.blit(self.surf_scanlines, (0, 0))
 
 
 class PongGame:
@@ -114,6 +270,10 @@ class PongGame:
 
         # Modo de jogo: 1 (1 Jogador vs IA), 2 (2 Jogadores)
         self.modo_jogo = 1
+
+        # Partida autônoma em segundo plano e rastros retrô
+        self.partida_fundo = PartidaFundo()
+        self.rastro_bola_jogo = []
 
         # Controle da contagem regressiva de 3 segundos
         self.em_contagem = False
@@ -186,6 +346,7 @@ class PongGame:
         direcao_y = random.choice([-0.7, -0.4, 0.4, 0.7])
         self.vel_bola_x = direcao_x * VEL_INICIAL_BOLA
         self.vel_bola_y = direcao_y * VEL_INICIAL_BOLA
+        self.rastro_bola_jogo = []
 
     def iniciar_partida(self, modo=1):
         """Prepara o início da partida para 1 ou 2 jogadores com contagem regressiva de 3s."""
@@ -200,6 +361,7 @@ class PongGame:
         self.em_contagem = True
         self.tempo_inicio_contagem = pygame.time.get_ticks()
         self.segundos_restantes = 3
+        self.rastro_bola_jogo = []
         self.estado = "JOGANDO"
 
     def iniciar_partida_2p(self):
@@ -382,6 +544,7 @@ class PongGame:
     # ==========================================
     def atualizar(self):
         if self.estado != "JOGANDO":
+            self.partida_fundo.atualizar()
             return
 
         teclas = pygame.key.get_pressed()
@@ -412,6 +575,11 @@ class PongGame:
             else:
                 self.em_contagem = False
                 self.reiniciar_bola()
+
+        # Registrar rastro de movimento retrô da bola
+        self.rastro_bola_jogo.append(self.bola.center)
+        if len(self.rastro_bola_jogo) > 6:
+            self.rastro_bola_jogo.pop(0)
 
         # Movimento da bola
         self.bola.x += int(self.vel_bola_x)
@@ -458,6 +626,10 @@ class PongGame:
     def desenhar(self):
         self.tela.fill(PRETO)
 
+        # Partida animada retrô rolando no fundo de todos os menus
+        if self.estado != "JOGANDO":
+            self.partida_fundo.desenhar(self.tela, self.cor_barras, self.cor_bola, self.cor_rede, self.fonte_placar)
+
         if self.estado == "SPLASH":
             self.desenhar_splash()
         elif self.estado == "MENU_PRINCIPAL":
@@ -475,16 +647,21 @@ class PongGame:
 
     def desenhar_splash(self):
         """Tela inicial com 'Pong Clone' em destaque e aviso de apertar tecla."""
+        # Moldura retrô central para destacar sobre a partida de fundo
+        rect_card = pygame.Rect(LARGURA // 2 - 270, ALTURA // 2 - 110, 540, 220)
+        pygame.draw.rect(self.tela, (12, 12, 18), rect_card, border_radius=12)
+        pygame.draw.rect(self.tela, BRANCO, rect_card, width=2, border_radius=12)
+
         # Título em destaque
         titulo = self.fonte_titulo.render("PONG CLONE", True, BRANCO)
-        rect_titulo = titulo.get_rect(center=(LARGURA // 2, ALTURA // 2 - 60))
+        rect_titulo = titulo.get_rect(center=(LARGURA // 2, ALTURA // 2 - 45))
         self.tela.blit(titulo, rect_titulo)
 
         # Efeito de piscar sutil
         piscar = (pygame.time.get_ticks() // 500) % 2 == 0
         if piscar:
             texto = self.fonte_subtitulo.render("Aperte qualquer tecla para iniciar", True, AMARELO)
-            rect_texto = texto.get_rect(center=(LARGURA // 2, ALTURA // 2 + 50))
+            rect_texto = texto.get_rect(center=(LARGURA // 2, ALTURA // 2 + 35))
             self.tela.blit(texto, rect_texto)
 
         dica = self.fonte_texto.render("Pressione qualquer tecla ou clique para continuar", True, CINZA_TEXTO)
@@ -646,8 +823,22 @@ class PongGame:
         pygame.draw.rect(self.tela, self.cor_barras, self.palete_esq)
         pygame.draw.rect(self.tela, self.cor_barras, self.palete_dir)
 
-        # Bolinha (com a cor customizada da bola)
-        pygame.draw.ellipse(self.tela, self.cor_bola, self.bola)
+        # Rastro retrô da bola (fantasma / efeito fósforo CRT)
+        qtd = len(self.rastro_bola_jogo)
+        for i, pos in enumerate(self.rastro_bola_jogo):
+            fator = (i + 1) / (qtd + 1)
+            tam = max(4, int(TAMANHO_BOLA * (0.35 + 0.65 * fator)))
+            cor_fantasma = (
+                int(self.cor_bola[0] * fator * 0.75),
+                int(self.cor_bola[1] * fator * 0.75),
+                int(self.cor_bola[2] * fator * 0.75)
+            )
+            rect_fantasma = pygame.Rect(0, 0, tam, tam)
+            rect_fantasma.center = pos
+            pygame.draw.rect(self.tela, cor_fantasma, rect_fantasma)
+
+        # Bolinha quadrada clássica retrô
+        pygame.draw.rect(self.tela, self.cor_bola, self.bola)
 
         # Placar numérico
         texto_esq = self.fonte_placar.render(str(self.pontos_esq), True, BRANCO)
@@ -677,6 +868,9 @@ class PongGame:
             txt_prep = self.fonte_texto.render("PREPAREM-SE!", True, BRANCO)
             rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 + 55))
             self.tela.blit(txt_prep, rect_prep)
+
+        # Scanlines CRT retrô sobre o jogo
+        self.tela.blit(self.partida_fundo.surf_scanlines, (0, 0))
 
         # Instruções no rodapé adaptadas ao modo
         if self.modo_jogo == 1:
