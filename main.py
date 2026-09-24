@@ -69,6 +69,9 @@ class Botao:
 
         surface_txt = fonte.render(self.texto, True, txt_cor)
         rect_txt = surface_txt.get_rect(center=self.rect.center)
+        tela.blit(surface_txt, rect_txt)
+
+
 class PartidaFundo:
     """Simulação autônoma de Pong para rodar no fundo dos menus com estilo retrô CRT."""
     def __init__(self):
