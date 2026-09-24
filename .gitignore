@@ -1,0 +1,30 @@
+# Ambientes Virtuais Python
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de distribuicao / pacotes
+build/
+dist/
+*.egg-info/
+
+# Logs e arquivos temporarios
+*.log
+*.sqlite3
+
+# Arquivos de IDEs e Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+Desktop.ini
