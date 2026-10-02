@@ -840,6 +840,19 @@ class PongGame:
                     self.mensagem_transicao_adv = f"ADVERSÁRIO #{self.adversario_atual - 1} DERROTADO!"
                     self.tempo_transicao_adv = pygame.time.get_ticks()
 
+                    # Transição para o próximo adversário: contagem de 3 segundos (não a de 2s)
+                    self.em_contagem_ponto = False
+                    self.em_contagem = True
+                    self.tempo_inicio_contagem = pygame.time.get_ticks()
+                    self.segundos_restantes = 3
+                    self.palete_esq.centery = ALTURA // 2
+                    self.palete_dir.centery = ALTURA // 2
+
+                    # Interrompe música da partida e toca o som da contagem regressiva de 3s
+                    self.parar_musica()
+                    self.tocar_som(self.som_contagem_3s)
+                    return
+
             else:
                 # CPU PONTUOU NO JOGADOR
                 self.tocar_som(self.som_enemy_point)
@@ -1179,15 +1192,19 @@ class PongGame:
         else:
             self.atualizar_ia()
 
-        # Lógica da Contagem Regressiva de 3 segundos (Início de partida)
+        # Lógica da Contagem Regressiva de 3 segundos (Início de partida ou Novo Adversário)
         if self.em_contagem:
             decorrido_ms = pygame.time.get_ticks() - self.tempo_inicio_contagem
             segundos_passados = decorrido_ms / 1000.0
             if segundos_passados < 3.0:
                 self.segundos_restantes = 3 - int(segundos_passados)
+                # Atualizar ondas de impacto e partículas mesmo durante a contagem
+                self.ondas_impacto = [o for o in self.ondas_impacto if o.atualizar()]
+                self.particulas = [p for p in self.particulas if p.atualizar()]
                 return
             else:
                 self.em_contagem = False
+                self.mensagem_transicao_adv = ""
                 self.reiniciar_bola()
                 self.tocar_musica_partida()
 
@@ -1673,54 +1690,6 @@ class PongGame:
             self.superficie_jogo.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
             self.superficie_jogo.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
 
-        # Contador de 3 segundos na tela antes de iniciar a partida (na camada HUD)
-        if self.em_contagem:
-            rect_box = pygame.Rect(LARGURA // 2 - 120, ALTURA // 2 - 90, 240, 180)
-            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
-            pygame.draw.rect(self.superficie_jogo, AMARELO, rect_box, width=3, border_radius=12)
-
-            txt_cont = self.fonte_contador.render(str(self.segundos_restantes), True, AMARELO)
-            rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 - 15))
-            self.superficie_jogo.blit(txt_cont, rect_cont)
-
-            txt_prep = self.fonte_texto.render("PREPAREM-SE!", True, BRANCO)
-            rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 + 55))
-            self.superficie_jogo.blit(txt_prep, rect_prep)
-
-        # Contador de 2 segundos após marcação de ponto (na camada HUD)
-        elif self.em_contagem_ponto:
-            rect_box = pygame.Rect(LARGURA // 2 - 150, ALTURA // 2 - 95, 300, 190)
-
-            if self.modo_jogo == 1:
-                if self.ultimo_marcador == "esq":
-                    cor_borda = VERDE_DESTAQUE
-                    txt_titulo = "SEU PONTO!" if not self.mensagem_transicao_adv else "VITÓRIA!"
-                else:
-                    cor_borda = (235, 75, 75)
-                    txt_titulo = "PONTO DA CPU!"
-            else:
-                cor_borda = AMARELO
-                txt_titulo = "PONTO: JOGADOR 1" if self.ultimo_marcador == "esq" else "PONTO: JOGADOR 2"
-
-            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
-            pygame.draw.rect(self.superficie_jogo, cor_borda, rect_box, width=3, border_radius=12)
-
-            txt_ponto = self.fonte_subtitulo.render(txt_titulo, True, cor_borda)
-            rect_ponto = txt_ponto.get_rect(center=(LARGURA // 2, ALTURA // 2 - 50))
-            self.superficie_jogo.blit(txt_ponto, rect_ponto)
-
-            txt_cont = self.fonte_contador.render(str(self.segundos_restantes_ponto), True, AMARELO)
-            rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 + 5))
-            self.superficie_jogo.blit(txt_cont, rect_cont)
-
-            if self.modo_jogo == 1 and self.mensagem_transicao_adv and (pygame.time.get_ticks() - self.tempo_transicao_adv < 3000):
-                txt_prox = self.fonte_texto_bold.render(f"Próximo: Adversário #{self.adversario_atual}", True, AMARELO)
-            else:
-                txt_prox = self.fonte_texto.render("Próxima bola em...", True, BRANCO)
-
-            rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 62))
-            self.superficie_jogo.blit(txt_prox, rect_prox)
-
         # Instruções no rodapé adaptadas ao modo (na camada HUD)
         if self.modo_jogo == 1:
             texto_rodape = "Você: W/S | Oponente: CPU (IA) | R: Reiniciar | ESC: Menu Principal"
@@ -1759,7 +1728,72 @@ class PongGame:
             p.desenhar(self.superficie_jogo)
 
         # -------------------------------------------------------------
-        # CAMADA 4: Efeito de Scanlines CRT e Tremor de Tela
+        # CAMADA 4 (BOXES DE CONTAGEM REGRESSIVA): Renderizadas POR CIMA da bolinha
+        # -------------------------------------------------------------
+        # Contador de 3 segundos (Início de partida ou Transição para Novo Adversário)
+        if self.em_contagem:
+            rect_box = pygame.Rect(LARGURA // 2 - 160, ALTURA // 2 - 100, 320, 200)
+            cor_borda = VERDE_DESTAQUE if (self.modo_jogo == 1 and self.mensagem_transicao_adv) else AMARELO
+            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
+            pygame.draw.rect(self.superficie_jogo, cor_borda, rect_box, width=3, border_radius=12)
+
+            if self.modo_jogo == 1 and self.mensagem_transicao_adv:
+                txt_titulo = self.fonte_texto_bold.render(self.mensagem_transicao_adv, True, VERDE_DESTAQUE)
+                rect_titulo = txt_titulo.get_rect(center=(LARGURA // 2, ALTURA // 2 - 55))
+                self.superficie_jogo.blit(txt_titulo, rect_titulo)
+
+                txt_cont = self.fonte_contador.render(str(self.segundos_restantes), True, AMARELO)
+                rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 + 5))
+                self.superficie_jogo.blit(txt_cont, rect_cont)
+
+                txt_prox = self.fonte_texto_bold.render(f"Próximo: Adversário #{self.adversario_atual}", True, AMARELO)
+                rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 65))
+                self.superficie_jogo.blit(txt_prox, rect_prox)
+            else:
+                txt_prep = self.fonte_subtitulo.render("PREPAREM-SE!", True, AMARELO)
+                rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 - 50))
+                self.superficie_jogo.blit(txt_prep, rect_prep)
+
+                txt_cont = self.fonte_contador.render(str(self.segundos_restantes), True, AMARELO)
+                rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 + 8))
+                self.superficie_jogo.blit(txt_cont, rect_cont)
+
+                txt_sub = self.fonte_texto.render("A partida vai começar!", True, BRANCO)
+                rect_sub = txt_sub.get_rect(center=(LARGURA // 2, ALTURA // 2 + 65))
+                self.superficie_jogo.blit(txt_sub, rect_sub)
+
+        # Contador de 2 segundos após ponto normal
+        elif self.em_contagem_ponto:
+            rect_box = pygame.Rect(LARGURA // 2 - 150, ALTURA // 2 - 95, 300, 190)
+
+            if self.modo_jogo == 1:
+                if self.ultimo_marcador == "esq":
+                    cor_borda = VERDE_DESTAQUE
+                    txt_titulo = "SEU PONTO!"
+                else:
+                    cor_borda = (235, 75, 75)
+                    txt_titulo = "PONTO DA CPU!"
+            else:
+                cor_borda = AMARELO
+                txt_titulo = "PONTO: JOGADOR 1" if self.ultimo_marcador == "esq" else "PONTO: JOGADOR 2"
+
+            pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
+            pygame.draw.rect(self.superficie_jogo, cor_borda, rect_box, width=3, border_radius=12)
+
+            txt_ponto = self.fonte_subtitulo.render(txt_titulo, True, cor_borda)
+            rect_ponto = txt_ponto.get_rect(center=(LARGURA // 2, ALTURA // 2 - 50))
+            self.superficie_jogo.blit(txt_ponto, rect_ponto)
+
+            txt_cont = self.fonte_contador.render(str(self.segundos_restantes_ponto), True, AMARELO)
+            rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 + 5))
+            self.superficie_jogo.blit(txt_cont, rect_cont)
+
+            txt_prox = self.fonte_texto.render("Próxima bola em...", True, BRANCO)
+            rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 62))
+            self.superficie_jogo.blit(txt_prox, rect_prox)
+
+        # -------------------------------------------------------------
+        # CAMADA 5: Efeito de Scanlines CRT e Tremor de Tela
         # -------------------------------------------------------------
         self.superficie_jogo.blit(self.partida_fundo.surf_scanlines, (0, 0))
 
