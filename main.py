@@ -42,7 +42,7 @@ CORES_PRESET = [
 LARGURA_PALETE = 15
 ALTURA_PALETE = 90
 VEL_PALETE = 6
-VEL_IA_BASE = 4.4
+VEL_IA_BASE = 4.2
 
 TAMANHO_BOLA = 15
 VEL_INICIAL_BOLA = 5
@@ -835,8 +835,8 @@ class PongGame:
                     self.vida_jogador = 3  # Recupera todos os corações perdidos
                     self.vida_cpu_maxima = 3 + (self.adversario_atual - 1)  # Mais 1 coração de vida
                     self.vida_cpu = self.vida_cpu_maxima
-                    # Aumento gradual de velocidade da CPU (bem pouco por adversário)
-                    self.vel_ia_atual = min(7.5, VEL_IA_BASE + (self.adversario_atual - 1) * 0.22)
+                    # Aumento gradual e suave de velocidade da CPU (curva menor)
+                    self.vel_ia_atual = min(6.5, VEL_IA_BASE + (self.adversario_atual - 1) * 0.08)
                     self.mensagem_transicao_adv = f"ADVERSÁRIO #{self.adversario_atual - 1} DERROTADO!"
                     self.tempo_transicao_adv = pygame.time.get_ticks()
 
@@ -1264,9 +1264,9 @@ class PongGame:
         if self.bola.colliderect(self.palete_dir) and self.vel_bola_x > 0:
             self.bola.right = self.palete_dir.left
 
-            # Força de rebatimento gradual da CPU com os adversários
+            # Força de rebatimento gradual e equilibrada da CPU
             if self.modo_jogo == 1:
-                mult_cpu = 1.04 + min(0.10, (self.adversario_atual - 1) * 0.015)
+                mult_cpu = 1.035 + min(0.06, (self.adversario_atual - 1) * 0.005)
                 self.vel_bola_x = -self.vel_bola_x * mult_cpu
             else:
                 self.vel_bola_x = -self.vel_bola_x * 1.05
@@ -1592,44 +1592,23 @@ class PongGame:
         self.btn_voltar_como_jogar.desenhar(self.tela, self.fonte_botao)
 
     def desenhar_jogo(self):
-        """Renderiza a quadra de jogo com vidas, corações, combo, adversário e efeitos retrô."""
+        """Renderiza a quadra de jogo com camadas ordenadas: rede ao fundo, HUD na camada intermediária e paletes/bolinha em primeiro plano."""
         self.superficie_jogo.fill(PRETO)
 
-        # Rede pontilhada central
+        # -------------------------------------------------------------
+        # CAMADA 1 (FUNDO ABSOLUTO / ÚLTIMA CAMADA): Rede Central Pontilhada
+        # -------------------------------------------------------------
         passo = 15
         for y in range(0, ALTURA, passo * 2):
             pygame.draw.rect(self.superficie_jogo, self.cor_rede, (LARGURA // 2 - 2, y, 4, passo))
 
-        # Paletes
-        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_esq)
-        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_dir)
-
-        # Ondas aquáticas de impacto retrô ao fazer ponto
+        # Ondas aquáticas de impacto retrô ao fazer ponto (no fundo)
         for o in self.ondas_impacto:
             o.desenhar(self.superficie_jogo)
 
-        # Partículas de impacto no ar
-        for p in self.particulas:
-            p.desenhar(self.superficie_jogo)
-
-        # Rastro retrô da bola
-        qtd = len(self.rastro_bola_jogo)
-        for i, pos in enumerate(self.rastro_bola_jogo):
-            fator = (i + 1) / (qtd + 1)
-            tam = max(4, int(TAMANHO_BOLA * (0.35 + 0.65 * fator)))
-            cor_fantasma = (
-                int(self.cor_bola[0] * fator * 0.75),
-                int(self.cor_bola[1] * fator * 0.75),
-                int(self.cor_bola[2] * fator * 0.75)
-            )
-            rect_fantasma = pygame.Rect(0, 0, tam, tam)
-            rect_fantasma.center = pos
-            pygame.draw.rect(self.superficie_jogo, cor_fantasma, rect_fantasma)
-
-        # Bolinha quadrada clássica retrô
-        pygame.draw.rect(self.superficie_jogo, self.cor_bola, self.bola)
-
-        # Placar, Vidas e Combos
+        # -------------------------------------------------------------
+        # CAMADA 2 (CAMADA DA HUD): Abaixo dos paletes e da bolinha
+        # -------------------------------------------------------------
         if self.modo_jogo == 1:
             # Distintivo do Adversário Atual no topo
             rect_adv = pygame.Rect(LARGURA // 2 - 100, 16, 200, 32)
@@ -1694,7 +1673,7 @@ class PongGame:
             self.superficie_jogo.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
             self.superficie_jogo.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
 
-        # Contador de 3 segundos na tela antes de iniciar a partida
+        # Contador de 3 segundos na tela antes de iniciar a partida (na camada HUD)
         if self.em_contagem:
             rect_box = pygame.Rect(LARGURA // 2 - 120, ALTURA // 2 - 90, 240, 180)
             pygame.draw.rect(self.superficie_jogo, (18, 18, 24), rect_box, border_radius=12)
@@ -1708,11 +1687,10 @@ class PongGame:
             rect_prep = txt_prep.get_rect(center=(LARGURA // 2, ALTURA // 2 + 55))
             self.superficie_jogo.blit(txt_prep, rect_prep)
 
-        # Contador de 2 segundos após marcação de ponto
+        # Contador de 2 segundos após marcação de ponto (na camada HUD)
         elif self.em_contagem_ponto:
             rect_box = pygame.Rect(LARGURA // 2 - 150, ALTURA // 2 - 95, 300, 190)
 
-            # Estilo e texto personalizados de acordo com quem pontuou
             if self.modo_jogo == 1:
                 if self.ultimo_marcador == "esq":
                     cor_borda = VERDE_DESTAQUE
@@ -1743,10 +1721,7 @@ class PongGame:
             rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 62))
             self.superficie_jogo.blit(txt_prox, rect_prox)
 
-        # Scanlines CRT retrô sobre o jogo
-        self.superficie_jogo.blit(self.partida_fundo.surf_scanlines, (0, 0))
-
-        # Instruções no rodapé adaptadas ao modo
+        # Instruções no rodapé adaptadas ao modo (na camada HUD)
         if self.modo_jogo == 1:
             texto_rodape = "Você: W/S | Oponente: CPU (IA) | R: Reiniciar | ESC: Menu Principal"
         else:
@@ -1754,6 +1729,39 @@ class PongGame:
 
         instrucoes = self.fonte_texto.render(texto_rodape, True, CINZA_TEXTO)
         self.superficie_jogo.blit(instrucoes, (LARGURA // 2 - instrucoes.get_width() // 2, ALTURA - 25))
+
+        # -------------------------------------------------------------
+        # CAMADA 3 (CAMADA PRINCIPAL DE JOGO): Paletes e Bolinha por CIMA da HUD
+        # -------------------------------------------------------------
+        # Rastro retrô da bola
+        qtd = len(self.rastro_bola_jogo)
+        for i, pos in enumerate(self.rastro_bola_jogo):
+            fator = (i + 1) / (qtd + 1)
+            tam = max(4, int(TAMANHO_BOLA * (0.35 + 0.65 * fator)))
+            cor_fantasma = (
+                int(self.cor_bola[0] * fator * 0.75),
+                int(self.cor_bola[1] * fator * 0.75),
+                int(self.cor_bola[2] * fator * 0.75)
+            )
+            rect_fantasma = pygame.Rect(0, 0, tam, tam)
+            rect_fantasma.center = pos
+            pygame.draw.rect(self.superficie_jogo, cor_fantasma, rect_fantasma)
+
+        # Paletes (renderizadas sobre a HUD para máxima visibilidade)
+        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_esq)
+        pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_dir)
+
+        # Bolinha (renderizada sobre a HUD para que nunca se esconda)
+        pygame.draw.rect(self.superficie_jogo, self.cor_bola, self.bola)
+
+        # Partículas de impacto no ar (sobretudo paletes e bola)
+        for p in self.particulas:
+            p.desenhar(self.superficie_jogo)
+
+        # -------------------------------------------------------------
+        # CAMADA 4: Efeito de Scanlines CRT e Tremor de Tela
+        # -------------------------------------------------------------
+        self.superficie_jogo.blit(self.partida_fundo.surf_scanlines, (0, 0))
 
         # Aplica a tremida na tela principal (Screen Shake)
         self.tela.blit(self.superficie_jogo, (self.shake_x, self.shake_y))

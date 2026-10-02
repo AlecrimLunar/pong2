@@ -24,6 +24,12 @@
     "data": "2026-10-01"
   },
   {
+    "nome": "ALE",
+    "adversario": 4,
+    "combo_max": 4,
+    "data": "2026-10-02"
+  },
+  {
     "nome": "CPU",
     "adversario": 3,
     "combo_max": 2,
