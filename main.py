@@ -2,6 +2,8 @@ import pygame
 import sys
 import random
 import os
+import json
+import datetime
 
 # ==========================================
 # CONSTANTES DE CONFIGURAÇÃO
@@ -20,6 +22,8 @@ CINZA_BORDA = (65, 65, 80)
 CINZA_TEXTO = (170, 170, 180)
 AMARELO = (255, 220, 50)
 VERDE_DESTAQUE = (50, 220, 100)
+VERMELHO_CORACAO = (235, 55, 75)
+DOURADO = (255, 215, 0)
 
 # Cores Pré-definidas para Customização
 CORES_PRESET = [
@@ -38,10 +42,121 @@ CORES_PRESET = [
 LARGURA_PALETE = 15
 ALTURA_PALETE = 90
 VEL_PALETE = 6
-VEL_IA = 4.5  # Limite de velocidade da IA para não ser invencível
+VEL_IA_BASE = 4.4
 
 TAMANHO_BOLA = 15
 VEL_INICIAL_BOLA = 5
+
+# Arquivo de persistência de recordes arcade
+ARQUIVO_RECORDES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "highscores.json")
+CARACTERES_ARCADE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+
+
+def carregar_recordes():
+    """Carrega a tabela de recordes persistente do arquivo JSON."""
+    if os.path.exists(ARQUIVO_RECORDES):
+        try:
+            with open(ARQUIVO_RECORDES, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+                if isinstance(dados, list):
+                    return dados
+        except Exception as e:
+            print(f"Aviso ao carregar recordes: {e}")
+    # Recordes padrão de arcade clássico
+    return [
+        {"nome": "ACE", "adversario": 10, "combo_max": 5, "data": "2026-10-01"},
+        {"nome": "VET", "adversario": 7,  "combo_max": 4, "data": "2026-10-01"},
+        {"nome": "BOT", "adversario": 5,  "combo_max": 3, "data": "2026-10-01"},
+        {"nome": "CPU", "adversario": 3,  "combo_max": 2, "data": "2026-10-01"},
+        {"nome": "P1_", "adversario": 1,  "combo_max": 1, "data": "2026-10-01"},
+    ]
+
+
+def salvar_recordes(recordes):
+    """Salva a tabela de recordes em disco de forma persistente."""
+    try:
+        with open(ARQUIVO_RECORDES, "w", encoding="utf-8") as f:
+            json.dump(recordes, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Erro ao salvar recordes: {e}")
+
+
+def registrar_novo_recorde(nome, adversario, combo_max):
+    """Insere um novo recorde na tabela ordenada e salva no arquivo."""
+    recordes = carregar_recordes()
+    novo = {
+        "nome": str(nome)[:3].upper(),
+        "adversario": int(adversario),
+        "combo_max": int(combo_max),
+        "data": str(datetime.date.today())
+    }
+    recordes.append(novo)
+    # Ordenar por adversário decrescente, e por combo decrescente
+    recordes.sort(key=lambda r: (r.get("adversario", 0), r.get("combo_max", 0)), reverse=True)
+    recordes = recordes[:10]  # Manter top 10
+    salvar_recordes(recordes)
+    return recordes
+
+
+def desenhar_coracao(tela, x, y, tamanho=18, cor=VERMELHO_CORACAO, preenchido=True):
+    """Desenha um coração retrô estilizado na tela."""
+    surf = pygame.Surface((tamanho, tamanho), pygame.SRCALPHA)
+    r = tamanho // 4
+    c_esq = (r, r)
+    c_dir = (tamanho - r, r)
+    if preenchido:
+        pygame.draw.circle(surf, cor, c_esq, r)
+        pygame.draw.circle(surf, cor, c_dir, r)
+        pontos = [(0, r), (tamanho, r), (tamanho // 2, tamanho)]
+        pygame.draw.polygon(surf, cor, pontos)
+    else:
+        cor_borda = (80, 80, 95)
+        pygame.draw.circle(surf, cor_borda, c_esq, r, width=2)
+        pygame.draw.circle(surf, cor_borda, c_dir, r, width=2)
+        pontos = [(0, r), (tamanho, r), (tamanho // 2, tamanho)]
+        pygame.draw.polygon(surf, cor_borda, pontos, width=2)
+    tela.blit(surf, (x, y))
+
+
+class OndaImpacto:
+    """Efeito de poucas ondas retrô se espalhando como uma gota d'água ao marcar ponto."""
+    def __init__(self, x, y, cor):
+        self.x = float(x)
+        self.y = float(y)
+        self.cor = cor
+        # Poucas ondas (3 anéis concêntricos)
+        self.ondas = [
+            {"raio": 4.0, "delay": 0, "ativo": True},
+            {"raio": 4.0, "delay": 7, "ativo": False},
+            {"raio": 4.0, "delay": 14, "ativo": False},
+        ]
+        self.frame = 0
+        self.duracao_max = 42
+        self.raio_max = 140.0
+
+    def atualizar(self):
+        self.frame += 1
+        for o in self.ondas:
+            if not o["ativo"] and self.frame >= o["delay"]:
+                o["ativo"] = True
+            if o["ativo"]:
+                o["raio"] += 3.4
+        return self.frame < self.duracao_max
+
+    def desenhar(self, tela):
+        for o in self.ondas:
+            if o["ativo"]:
+                fator = min(1.0, o["raio"] / self.raio_max)
+                alpha = int(220 * (1.0 - fator))
+                if alpha <= 0:
+                    continue
+                raio = int(o["raio"])
+                diametro = raio * 2 + 6
+                surf = pygame.Surface((diametro, diametro), pygame.SRCALPHA)
+                cor_rgba = (*self.cor[:3], alpha)
+                espessura = 2 if fator > 0.5 else 3
+                pygame.draw.circle(surf, cor_rgba, (raio + 3, raio + 3), raio, width=espessura)
+                tela.blit(surf, (int(self.x - raio - 3), int(self.y - raio - 3)))
 
 
 class Particula:
@@ -156,7 +271,6 @@ class PartidaFundo:
         self.particulas.clear()
 
     def atualizar(self):
-        # Atualizar partículas do fundo
         self.particulas = [p for p in self.particulas if p.atualizar()]
 
         if self.delay_ponto > 0:
@@ -165,12 +279,10 @@ class PartidaFundo:
                 self.reiniciar_bola()
             return
 
-        # Registrar rastro de movimento (efeito ghosting de fósforo CRT)
         self.rastro.append(self.bola.center)
         if len(self.rastro) > self.max_rastro:
             self.rastro.pop(0)
 
-        # Movimento inteligente da palete esquerda no fundo
         if self.vel_x < 0:
             alvo = self.bola.centery
             diff = alvo - self.palete_esq.centery
@@ -181,7 +293,6 @@ class PartidaFundo:
             if abs(diff_centro) > 12:
                 self.palete_esq.y += int(min(2.0, diff_centro) if diff_centro > 0 else max(-2.0, diff_centro))
 
-        # Movimento inteligente da palete direita no fundo
         if self.vel_x > 0:
             alvo = self.bola.centery
             diff = alvo - self.palete_dir.centery
@@ -192,15 +303,12 @@ class PartidaFundo:
             if abs(diff_centro) > 12:
                 self.palete_dir.y += int(min(2.0, diff_centro) if diff_centro > 0 else max(-2.0, diff_centro))
 
-        # Limitar dentro da tela
         self.palete_esq.top = max(0, min(self.altura - self.palete_esq.height, self.palete_esq.top))
         self.palete_dir.top = max(0, min(self.altura - self.palete_dir.height, self.palete_dir.top))
 
-        # Mover a bola
         self.bola.x += int(self.vel_x)
         self.bola.y += int(self.vel_y)
 
-        # Colisões com as bordas
         if self.bola.top <= 0:
             self.bola.top = 0
             self.vel_y *= -1
@@ -210,7 +318,6 @@ class PartidaFundo:
             self.vel_y *= -1
             self.criar_impacto(self.bola.centerx, self.bola.bottom, 0, -1, (200, 200, 200), qtd=6)
 
-        # Colisão com paletes
         if self.bola.colliderect(self.palete_esq) and self.vel_x < 0:
             self.bola.left = self.palete_esq.right
             self.vel_x = -self.vel_x * 1.03
@@ -225,11 +332,9 @@ class PartidaFundo:
             self.vel_y = offset * abs(self.vel_x)
             self.criar_impacto(self.palete_dir.left, self.bola.centery, -1, 0, (220, 220, 220), qtd=8)
 
-        # Limite de velocidade no fundo para jogadas fluidas e visíveis
         self.vel_x = max(-9, min(9, self.vel_x))
         self.vel_y = max(-9, min(9, self.vel_y))
 
-        # Pontuação
         if self.bola.left <= 0:
             self.pontos_dir += 1
             self.delay_ponto = 20
@@ -238,27 +343,22 @@ class PartidaFundo:
             self.delay_ponto = 20
 
     def desenhar(self, tela, cor_barras, cor_bola, cor_rede, fonte_placar):
-        # Linha pontilhada retrô no centro
         passo = 15
         for y in range(0, self.altura, passo * 2):
             pygame.draw.rect(tela, cor_rede, (self.largura // 2 - 2, y, 4, passo))
 
-        # Placar retrô de fundo
         placar_cor = (max(20, cor_barras[0] // 2), max(20, cor_barras[1] // 2), max(20, cor_barras[2] // 2))
         txt_esq = fonte_placar.render(str(self.pontos_esq), True, placar_cor)
         txt_dir = fonte_placar.render(str(self.pontos_dir), True, placar_cor)
         tela.blit(txt_esq, (self.largura // 4 - txt_esq.get_width() // 2, 25))
         tela.blit(txt_dir, (3 * self.largura // 4 - txt_dir.get_width() // 2, 25))
 
-        # Paletes de fundo
         pygame.draw.rect(tela, cor_barras, self.palete_esq)
         pygame.draw.rect(tela, cor_barras, self.palete_dir)
 
-        # Partículas de impacto no fundo
         for p in self.particulas:
             p.desenhar(tela)
 
-        # Rastro fantasma de fósforo retrô da bola
         qtd = len(self.rastro)
         for i, pos in enumerate(self.rastro):
             fator = (i + 1) / (qtd + 1)
@@ -272,20 +372,14 @@ class PartidaFundo:
             rect_r.center = pos
             pygame.draw.rect(tela, cor_rastro, rect_r)
 
-        # Bola quadrada retrô no fundo
         pygame.draw.rect(tela, cor_bola, self.bola)
-
-        # Escurecimento suave para os botões do menu ficarem perfeitamente legíveis
         tela.blit(self.surf_overlay, (0, 0))
-
-        # Scanlines CRT retrô
         tela.blit(self.surf_scanlines, (0, 0))
 
 
 def carregar_sistema_fontes():
     """Inicializa o sistema de renderização de fontes com suporte a fallback (pygame.font -> pygame.freetype -> DummyFont)."""
     global pygame
-    # 1. Tentar pygame.font padrão (SDL_ttf)
     try:
         if hasattr(pygame, "font") and pygame.font:
             pygame.font.init()
@@ -299,13 +393,11 @@ def carregar_sistema_fontes():
     except Exception as e:
         print(f"[Aviso] pygame.font indisponível ({e}). Tentando fallback para pygame.freetype...")
 
-    # 2. Tentar pygame.freetype (FreeType nativo da SDL2)
     try:
         import pygame.freetype
         pygame.freetype.init()
 
         class FreetypeWrapper:
-            """Wrapper para compatibilizar a API do pygame.freetype com pygame.font.Font."""
             def __init__(self, ft_font):
                 self._font = ft_font
 
@@ -328,14 +420,6 @@ def carregar_sistema_fontes():
         return criar_fonte_freetype
     except Exception as e:
         print(f"[Aviso] pygame.freetype também indisponível: {e}")
-
-    # 3. Fallback de emergência (caso nenhuma biblioteca de fontes exista no Linux)
-    print("\n" + "=" * 65)
-    print("[ERRO DE AMBIENTE] Nenhuma biblioteca de fontes do SDL instalada no sistema.")
-    print("Para corrigir no Linux (Ubuntu/Debian), execute:")
-    print("  sudo apt update && sudo apt install libsdl2-ttf-dev")
-    print("  pip uninstall -y pygame && pip install --no-cache-dir pygame")
-    print("=" * 65 + "\n")
 
     class DummyFont:
         def __init__(self, tamanho=20):
@@ -361,16 +445,17 @@ class PongGame:
         pygame.display.set_caption(TITULO)
         self.relogio = pygame.time.Clock()
 
-        # Fontes do sistema (tamanhos ajustados para perfeita diagramação na tela)
+        # Fontes do sistema
         self.fonte_titulo = criar_fonte("consolas", 56, bold=True)
         self.fonte_subtitulo = criar_fonte("consolas", 28, bold=True)
         self.fonte_botao = criar_fonte("consolas", 22, bold=True)
         self.fonte_aba = criar_fonte("consolas", 20, bold=True)
         self.fonte_texto = criar_fonte("consolas", 16)
+        self.fonte_texto_bold = criar_fonte("consolas", 16, bold=True)
         self.fonte_contador = criar_fonte("consolas", 84, bold=True)
         self.fonte_placar = criar_fonte("consolas", 48, bold=True)
 
-        # Estados: SPLASH, MENU_PRINCIPAL, MENU_JOGAR, MENU_OPCOES, MENU_COMO_JOGAR, JOGANDO
+        # Estados: SPLASH, MENU_PRINCIPAL, MENU_JOGAR, MENU_RECORDES, MENU_OPCOES, MENU_COMO_JOGAR, JOGANDO, REGISTRO_RECORDE
         self.estado = "SPLASH"
 
         # Cores Customizáveis (Branco por padrão)
@@ -378,14 +463,11 @@ class PongGame:
         self.cor_bola = (255, 255, 255)
         self.cor_rede = (255, 255, 255)
 
-        # Elemento selecionado no menu de opções: 'barras', 'bola', 'rede'
         self.elemento_opcao = "barras"
-
-        # Mensagem temporária (usada no aviso do modo 1 jogador)
         self.mensagem_aviso = ""
         self.tempo_aviso = 0
 
-        # Configurações do jogo Pong
+        # Elementos de jogo
         self.palete_esq = pygame.Rect(30, (ALTURA - ALTURA_PALETE) // 2, LARGURA_PALETE, ALTURA_PALETE)
         self.palete_dir = pygame.Rect(LARGURA - 30 - LARGURA_PALETE, (ALTURA - ALTURA_PALETE) // 2, LARGURA_PALETE, ALTURA_PALETE)
         self.bola = pygame.Rect((LARGURA - TAMANHO_BOLA) // 2, (ALTURA - TAMANHO_BOLA) // 2, TAMANHO_BOLA, TAMANHO_BOLA)
@@ -394,50 +476,66 @@ class PongGame:
         self.pontos_esq = 0
         self.pontos_dir = 0
 
-        # Modo de jogo: 1 (1 Jogador vs IA), 2 (2 Jogadores)
+        # Modo de jogo: 1 (1 Jogador vs IA Roguelite Arcade), 2 (2 Jogadores clássico)
         self.modo_jogo = 1
 
-        # Partida autônoma em segundo plano e rastros retrô
+        # Mecânicas do Modo 1 Jogador (Vidas, Adversários e Combo)
+        self.vida_jogador = 3
+        self.adversario_atual = 1
+        self.vida_cpu_maxima = 3
+        self.vida_cpu = 3
+        self.vel_ia_atual = VEL_IA_BASE
+        self.combo_atual = 0
+        self.tempo_combo_restante = 0.0
+        self.tempo_combo_janela = 20.0
+        self.max_combo_partida = 0
+        self.mensagem_transicao_adv = ""
+        self.tempo_transicao_adv = 0
+
+        # Efeitos visuais (Partículas, Tremor, Ondas aquáticas)
         self.partida_fundo = PartidaFundo()
         self.rastro_bola_jogo = []
-
-        # Partículas retrô e tremor de tela (Screen Shake)
         self.particulas = []
+        self.ondas_impacto = []
         self.tempo_tremida = 0
         self.intensidade_tremida = 0
         self.shake_x = 0
         self.shake_y = 0
         self.superficie_jogo = pygame.Surface((LARGURA, ALTURA))
 
-        # Imprevisibilidade da IA (offset dinâmico do ponto de rebatida)
+        # Imprevisibilidade da IA
         self.ia_offset_alvo = 0
         self.sortear_estrategia_ia()
 
-        # Controle da contagem regressiva de 3 segundos (início de partida)
+        # Contagens regressivas
         self.em_contagem = False
         self.tempo_inicio_contagem = 0
         self.segundos_restantes = 3
 
-        # Controle da contagem regressiva de 2 segundos (após cada ponto marcado)
         self.em_contagem_ponto = False
         self.tempo_inicio_ponto = 0
         self.segundos_restantes_ponto = 2
         self.ultimo_marcador = "esq"
 
         # Sistema de Áudio e Controle de Volume
-        self.volume = 0.7  # 70% de volume inicial
+        self.volume = 0.7
         self.arrastando_volume = False
         self.carregar_sons()
         self.tocar_musica_menu()
 
-        # Inicializar botões e interface dos menus
+        # Tabela de Recordes e Registro Arcade
+        self.recordes = carregar_recordes()
+        self.iniciais_arcade = ["A", "A", "A"]
+        self.slot_letra_ativo = 0
+
+        # Inicializar botões
         self.criar_botoes()
 
     # ==========================================
     # SISTEMA DE ÁUDIO
     # ==========================================
     def carregar_sons(self):
-        """Carrega todos os efeitos sonoros e músicas da pasta Sons/ com tratamento de exceções."""
+        """Carrega todos os efeitos sonoros e músicas da pasta Sons/."""
         self.audio_disponivel = False
         self.som_botao = None
         self.som_impacto = None
@@ -552,15 +650,16 @@ class PongGame:
     # BOTÕES E INTERFACE
     # ==========================================
     def criar_botoes(self):
-        # Botões do Menu Principal
+        # Botões do Menu Principal (5 opções agora, incluindo Recordes)
         largura_btn = 300
-        altura_btn = 50
+        altura_btn = 46
         x_btn = (LARGURA - largura_btn) // 2
         self.botoes_menu_principal = [
-            Botao((x_btn, 210, largura_btn, altura_btn), "1 - Jogar", "jogar"),
-            Botao((x_btn, 275, largura_btn, altura_btn), "2 - Opções", "opcoes"),
-            Botao((x_btn, 340, largura_btn, altura_btn), "3 - Como Jogar", "como_jogar"),
-            Botao((x_btn, 405, largura_btn, altura_btn), "4 - Sair", "sair"),
+            Botao((x_btn, 190, largura_btn, altura_btn), "1 - Jogar", "jogar"),
+            Botao((x_btn, 248, largura_btn, altura_btn), "2 - Recordes", "recordes"),
+            Botao((x_btn, 306, largura_btn, altura_btn), "3 - Opções", "opcoes"),
+            Botao((x_btn, 364, largura_btn, altura_btn), "4 - Como Jogar", "como_jogar"),
+            Botao((x_btn, 422, largura_btn, altura_btn), "5 - Sair", "sair"),
         ]
 
         # Botões do Menu Jogar
@@ -570,7 +669,10 @@ class PongGame:
             Botao((x_btn, 385, largura_btn, altura_btn), "ESC - Voltar", "voltar"),
         ]
 
-        # Botões de Abas no Menu de Opções (largura aumentada para 220px para não cortar '3 - Rede Central')
+        # Botão Voltar da Tabela de Recordes
+        self.btn_voltar_recordes = Botao(((LARGURA - 200) // 2, 520, 200, 42), "ESC - Voltar", "voltar")
+
+        # Botões de Abas no Menu de Opções
         largura_aba = 220
         altura_aba = 38
         espaco_aba = 15
@@ -613,6 +715,9 @@ class PongGame:
         self.btn_voltar_opcoes = Botao(((LARGURA - 200) // 2, 520, 200, 40), "ESC - Voltar", "voltar")
         self.btn_voltar_como_jogar = Botao(((LARGURA - 200) // 2, 525, 200, 42), "ESC - Voltar", "voltar")
 
+        # Botão de confirmação de recorde arcade
+        self.btn_confirmar_recorde = Botao(((LARGURA - 280) // 2, 435, 280, 44), "CONFIRMAR REGISTRO", "confirmar_recorde")
+
     def sortear_estrategia_ia(self):
         """Define onde na palete a IA tentará rebater a bola para criar ângulos variados e imprevisíveis."""
         opcoes = [-32, -24, -14, 0, 14, 24, 32]
@@ -645,29 +750,6 @@ class PongGame:
         self.particulas.clear()
         self.sortear_estrategia_ia()
 
-    def iniciar_contagem_ponto(self, lado_marcador="esq"):
-        """Inicia a pausa e contagem regressiva de 2 segundos após um ponto marcado e toca o som correspondente."""
-        self.em_contagem_ponto = True
-        self.tempo_inicio_ponto = pygame.time.get_ticks()
-        self.segundos_restantes_ponto = 2
-        self.ultimo_marcador = lado_marcador
-        self.bola.center = (LARGURA // 2, ALTURA // 2)
-        self.vel_bola_x = 0
-        self.vel_bola_y = 0
-        self.rastro_bola_jogo.clear()
-        self.particulas.clear()
-
-        # Áudio do ponto:
-        # Modo 1 Jogador: yourself_point para gol do usuário ('esq') e enemy_point para gol da CPU ('dir').
-        # Modo 2 Jogadores: yourself_point para ambos os jogadores (Player 1 e Player 2).
-        if self.modo_jogo == 1:
-            if lado_marcador == "esq":
-                self.tocar_som(self.som_yourself_point)
-            else:
-                self.tocar_som(self.som_enemy_point)
-        else:
-            self.tocar_som(self.som_yourself_point)
-
     def iniciar_partida(self, modo=1):
         """Prepara o início da partida para 1 ou 2 jogadores com contagem regressiva de 3s."""
         self.modo_jogo = modo
@@ -684,25 +766,125 @@ class PongGame:
         self.em_contagem_ponto = False
         self.rastro_bola_jogo = []
         self.particulas.clear()
+        self.ondas_impacto.clear()
         self.sortear_estrategia_ia()
+
+        # Configurações da campanha Roguelite Arcade para Modo 1 Jogador
+        if modo == 1:
+            self.vida_jogador = 3
+            self.adversario_atual = 1
+            self.vida_cpu_maxima = 3
+            self.vida_cpu = 3
+            self.vel_ia_atual = VEL_IA_BASE
+            self.combo_atual = 0
+            self.tempo_combo_restante = 0.0
+            self.tempo_combo_janela = 20.0
+            self.max_combo_partida = 0
+            self.mensagem_transicao_adv = ""
+            self.tempo_transicao_adv = 0
+
         self.estado = "JOGANDO"
 
         # Áudio: interrompe a música do menu e aciona a contagem regressiva de 3 segundos
         self.parar_musica()
         self.tocar_som(self.som_contagem_3s)
 
+    def iniciar_contagem_ponto(self, lado_marcador="esq"):
+        """Inicia a pausa e contagem regressiva de 2 segundos após um ponto marcado, aplica dano/combo e toca som."""
+        self.em_contagem_ponto = True
+        self.tempo_inicio_ponto = pygame.time.get_ticks()
+        self.segundos_restantes_ponto = 2
+        self.ultimo_marcador = lado_marcador
+
+        # Posição da onda de impacto no ponto
+        x_impacto = self.bola.centerx
+        y_impacto = self.bola.centery
+        self.bola.center = (LARGURA // 2, ALTURA // 2)
+        self.vel_bola_x = 0
+        self.vel_bola_y = 0
+        self.rastro_bola_jogo.clear()
+        self.particulas.clear()
+
+        # Mecânicas do Modo 1 Jogador (Vidas, Danos, Combos e Próximo Adversário)
+        if self.modo_jogo == 1:
+            if lado_marcador == "esq":
+                # JOGADOR PONTUOU NA CPU
+                self.tocar_som(self.som_yourself_point)
+                self.ondas_impacto.append(OndaImpacto(x_impacto, y_impacto, VERDE_DESTAQUE))
+
+                # Avançar combo do jogador
+                if self.combo_atual == 0:
+                    self.combo_atual = 1
+                else:
+                    self.combo_atual = min(5, self.combo_atual + 1)
+
+                self.max_combo_partida = max(self.max_combo_partida, self.combo_atual)
+
+                # Janela de tempo: 20s no combo 1 até 6s no combo 5
+                # Combo 1: 20s, Combo 2: 16.5s, Combo 3: 13s, Combo 4: 9.5s, Combo 5: 6s
+                self.tempo_combo_janela = max(6.0, 20.0 - (self.combo_atual - 1) * 3.5)
+                self.tempo_combo_restante = self.tempo_combo_janela
+
+                # Dano na CPU: 2 no combo 5, 1 nos demais
+                dano = 2 if self.combo_atual >= 5 else 1
+                self.vida_cpu = max(0, self.vida_cpu - dano)
+
+                # Verificar se a CPU foi derrotada
+                if self.vida_cpu <= 0:
+                    self.adversario_atual += 1
+                    self.vida_jogador = 3  # Recupera todos os corações perdidos
+                    self.vida_cpu_maxima = 3 + (self.adversario_atual - 1)  # Mais 1 coração de vida
+                    self.vida_cpu = self.vida_cpu_maxima
+                    # Aumento gradual de velocidade da CPU (bem pouco por adversário)
+                    self.vel_ia_atual = min(7.5, VEL_IA_BASE + (self.adversario_atual - 1) * 0.22)
+                    self.mensagem_transicao_adv = f"ADVERSÁRIO #{self.adversario_atual - 1} DERROTADO!"
+                    self.tempo_transicao_adv = pygame.time.get_ticks()
+
+            else:
+                # CPU PONTUOU NO JOGADOR
+                self.tocar_som(self.som_enemy_point)
+                self.ondas_impacto.append(OndaImpacto(x_impacto, y_impacto, (240, 60, 60)))
+
+                # Jogador perde 1 coração
+                self.vida_jogador = max(0, self.vida_jogador - 1)
+
+                # Combo é quebrado imediatamente quando a CPU pontua
+                self.combo_atual = 0
+                self.tempo_combo_restante = 0.0
+
+                # Verificar Game Over do jogador
+                if self.vida_jogador <= 0:
+                    self.preparar_registro_recorde()
+                    return
+
+        else:
+            # Modo 2 Jogadores: som clássico de yourself_point para ambos
+            self.tocar_som(self.som_yourself_point)
+            cor_onda = AMARELO if lado_marcador == "esq" else (100, 180, 255)
+            self.ondas_impacto.append(OndaImpacto(x_impacto, y_impacto, cor_onda))
+
+    def preparar_registro_recorde(self):
+        """Prepara o estado de registro de recorde de 3 letras ao perder no modo 1 jogador."""
+        self.estado = "REGISTRO_RECORDE"
+        self.iniciais_arcade = ["A", "A", "A"]
+        self.slot_letra_ativo = 0
+        self.parar_musica()
+        self.tocar_musica_menu()
+
     def atualizar_ia(self):
-        """Controla a palete direita com limites de velocidade, ângulos imprevisíveis e comportamento humanoide."""
+        """Controla a palete direita com limites de velocidade proporcionais ao adversário atual."""
+        vel_atual = self.vel_ia_atual if self.modo_jogo == 1 else 4.5
+
         if self.vel_bola_x > 0:
             ponto_alvo_palete = self.palete_dir.centery + self.ia_offset_alvo
             diferenca = self.bola.centery - ponto_alvo_palete
 
             if abs(diferenca) > 8:
                 if diferenca > 0:
-                    movimento = min(VEL_IA, diferenca)
+                    movimento = min(vel_atual, diferenca)
                     self.palete_dir.y += int(movimento)
                 else:
-                    movimento = max(-VEL_IA, diferenca)
+                    movimento = max(-vel_atual, diferenca)
                     self.palete_dir.y += int(movimento)
         else:
             centro_quadra = ALTURA // 2
@@ -751,6 +933,10 @@ class PongGame:
         elif self.estado == "MENU_JOGAR":
             for btn in self.botoes_menu_jogar:
                 btn.checar_hover(pos_mouse)
+        elif self.estado == "MENU_RECORDES":
+            self.btn_voltar_recordes.checar_hover(pos_mouse)
+        elif self.estado == "REGISTRO_RECORDE":
+            self.btn_confirmar_recorde.checar_hover(pos_mouse)
         elif self.estado == "MENU_OPCOES":
             for btn in self.botoes_abas_opcoes:
                 btn.checar_hover(pos_mouse)
@@ -771,7 +957,7 @@ class PongGame:
                     self.tocar_som(self.som_botao)
                     self.estado = "MENU_PRINCIPAL"
 
-            # --- MENU PRINCIPAL ---
+            # --- MENU PRINCIPAL (5 OPÇÕES) ---
             elif self.estado == "MENU_PRINCIPAL":
                 if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     for btn in self.botoes_menu_principal:
@@ -779,6 +965,9 @@ class PongGame:
                             self.tocar_som(self.som_botao)
                             if btn.id_acao == "jogar":
                                 self.estado = "MENU_JOGAR"
+                            elif btn.id_acao == "recordes":
+                                self.recordes = carregar_recordes()
+                                self.estado = "MENU_RECORDES"
                             elif btn.id_acao == "opcoes":
                                 self.estado = "MENU_OPCOES"
                             elif btn.id_acao == "como_jogar":
@@ -792,11 +981,15 @@ class PongGame:
                         self.estado = "MENU_JOGAR"
                     elif evento.key in (pygame.K_2, pygame.K_KP2):
                         self.tocar_som(self.som_botao)
-                        self.estado = "MENU_OPCOES"
+                        self.recordes = carregar_recordes()
+                        self.estado = "MENU_RECORDES"
                     elif evento.key in (pygame.K_3, pygame.K_KP3):
                         self.tocar_som(self.som_botao)
+                        self.estado = "MENU_OPCOES"
+                    elif evento.key in (pygame.K_4, pygame.K_KP4):
+                        self.tocar_som(self.som_botao)
                         self.estado = "MENU_COMO_JOGAR"
-                    elif evento.key in (pygame.K_4, pygame.K_KP4, pygame.K_ESCAPE):
+                    elif evento.key in (pygame.K_5, pygame.K_KP5, pygame.K_ESCAPE):
                         self.tocar_som(self.som_botao)
                         return False
 
@@ -824,22 +1017,74 @@ class PongGame:
                         self.tocar_som(self.som_botao)
                         self.estado = "MENU_PRINCIPAL"
 
+            # --- MENU RECORDES (TABELA DE RANQUE) ---
+            elif self.estado == "MENU_RECORDES":
+                if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                    if self.btn_voltar_recordes.foi_clicado(pos_mouse):
+                        self.tocar_som(self.som_botao)
+                        self.estado = "MENU_PRINCIPAL"
+                elif evento.type == pygame.KEYDOWN:
+                    if evento.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        self.tocar_som(self.som_botao)
+                        self.estado = "MENU_PRINCIPAL"
+
+            # --- REGISTRO DE RECORDE ARCADE (3 LETRAS) ---
+            elif self.estado == "REGISTRO_RECORDE":
+                if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                    if self.btn_confirmar_recorde.foi_clicado(pos_mouse):
+                        self.tocar_som(self.som_botao)
+                        nome = "".join(self.iniciais_arcade)
+                        self.recordes = registrar_novo_recorde(nome, self.adversario_atual, self.max_combo_partida)
+                        self.estado = "MENU_RECORDES"
+
+                elif evento.type == pygame.KEYDOWN:
+                    caractere_atual = self.iniciais_arcade[self.slot_letra_ativo]
+                    idx_atual = CARACTERES_ARCADE.find(caractere_atual)
+                    if idx_atual == -1:
+                        idx_atual = 0
+
+                    if evento.key in (pygame.K_UP, pygame.K_w):
+                        self.tocar_som(self.som_botao)
+                        novo_idx = (idx_atual + 1) % len(CARACTERES_ARCADE)
+                        self.iniciais_arcade[self.slot_letra_ativo] = CARACTERES_ARCADE[novo_idx]
+
+                    elif evento.key in (pygame.K_DOWN, pygame.K_s):
+                        self.tocar_som(self.som_botao)
+                        novo_idx = (idx_atual - 1) % len(CARACTERES_ARCADE)
+                        self.iniciais_arcade[self.slot_letra_ativo] = CARACTERES_ARCADE[novo_idx]
+
+                    elif evento.key in (pygame.K_RIGHT, pygame.K_d):
+                        self.tocar_som(self.som_botao)
+                        if self.slot_letra_ativo < 2:
+                            self.slot_letra_ativo += 1
+
+                    elif evento.key in (pygame.K_LEFT, pygame.K_a, pygame.K_BACKSPACE):
+                        self.tocar_som(self.som_botao)
+                        if self.slot_letra_ativo > 0:
+                            self.slot_letra_ativo -= 1
+
+                    elif evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                        self.tocar_som(self.som_botao)
+                        if self.slot_letra_ativo < 2:
+                            self.slot_letra_ativo += 1
+                        else:
+                            nome = "".join(self.iniciais_arcade)
+                            self.recordes = registrar_novo_recorde(nome, self.adversario_atual, self.max_combo_partida)
+                            self.estado = "MENU_RECORDES"
+
             # --- MENU OPÇÕES ---
             elif self.estado == "MENU_OPCOES":
                 if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                    # Checar abas
                     for btn in self.botoes_abas_opcoes:
                         if btn.foi_clicado(pos_mouse):
                             self.tocar_som(self.som_botao)
                             self.elemento_opcao = btn.id_acao
 
-                    # Checar botões de cores
                     for btn_cor in self.botoes_cores:
                         if btn_cor["rect"].collidepoint(pos_mouse):
                             self.tocar_som(self.som_botao)
                             self.definir_cor_elemento(btn_cor["cor"])
 
-                    # Checar botões e barra de volume
                     if self.btn_vol_menos.foi_clicado(pos_mouse):
                         self.aplicar_volume(self.volume - 0.05)
                         self.tocar_som(self.som_botao)
@@ -852,7 +1097,6 @@ class PongGame:
                         self.aplicar_volume(novo_vol)
                         self.tocar_som(self.som_botao)
 
-                    # Checar botão voltar
                     if self.btn_voltar_opcoes.foi_clicado(pos_mouse):
                         self.tocar_som(self.som_botao)
                         self.estado = "MENU_PRINCIPAL"
@@ -933,7 +1177,6 @@ class PongGame:
             if teclas[pygame.K_DOWN] and self.palete_dir.bottom < ALTURA:
                 self.palete_dir.y += VEL_PALETE
         else:
-            # Modo 1 Jogador: IA defende com velocidade limitada
             self.atualizar_ia()
 
         # Lógica da Contagem Regressiva de 3 segundos (Início de partida)
@@ -942,7 +1185,7 @@ class PongGame:
             segundos_passados = decorrido_ms / 1000.0
             if segundos_passados < 3.0:
                 self.segundos_restantes = 3 - int(segundos_passados)
-                return  # A bola NÃO se move durante a contagem
+                return
             else:
                 self.em_contagem = False
                 self.reiniciar_bola()
@@ -954,18 +1197,29 @@ class PongGame:
             segundos_passados = decorrido_ms / 1000.0
             if segundos_passados < 2.0:
                 self.segundos_restantes_ponto = 2 - int(segundos_passados)
-                return  # A bola NÃO se move durante a contagem
+                # Atualizar ondas de impacto mesmo na pausa
+                self.ondas_impacto = [o for o in self.ondas_impacto if o.atualizar()]
+                self.particulas = [p for p in self.particulas if p.atualizar()]
+                return
             else:
                 self.em_contagem_ponto = False
                 self.reiniciar_bola()
+
+        # Atualização do temporizador de COMBO (apenas com a bola em jogo)
+        if self.modo_jogo == 1 and self.combo_atual > 0:
+            self.tempo_combo_restante -= 1.0 / FPS
+            if self.tempo_combo_restante <= 0:
+                self.combo_atual = 0
+                self.tempo_combo_restante = 0.0
+
+        # Atualizar ondas de impacto aquáticas e partículas
+        self.ondas_impacto = [o for o in self.ondas_impacto if o.atualizar()]
+        self.particulas = [p for p in self.particulas if p.atualizar()]
 
         # Registrar rastro de movimento retrô da bola
         self.rastro_bola_jogo.append(self.bola.center)
         if len(self.rastro_bola_jogo) > 6:
             self.rastro_bola_jogo.pop(0)
-
-        # Atualizar partículas de impacto
-        self.particulas = [p for p in self.particulas if p.atualizar()]
 
         # Atualizar tremor de tela (Screen Shake)
         if self.tempo_tremida > 0:
@@ -990,29 +1244,43 @@ class PongGame:
             self.vel_bola_y *= -1
             self.criar_impacto(self.bola.centerx, self.bola.bottom, 0, -1, self.cor_bola, qtd=10, shake_intensidade=3, shake_duracao=5)
 
-        # Colisão com palete esquerda (ambas usam cor_barras)
+        # Colisão com palete esquerda (Jogador)
         if self.bola.colliderect(self.palete_esq) and self.vel_bola_x < 0:
             self.bola.left = self.palete_esq.right
             self.vel_bola_x = -self.vel_bola_x * 1.05
+
+            # Bônus de velocidade do COMBO do JOGADOR
+            if self.modo_jogo == 1 and self.combo_atual > 1:
+                # Combo 2 dá +0.7, Combo 3 +1.4, Combo 4 +2.1, Combo 5 (cap) +2.8
+                bonus_combo = (min(5, self.combo_atual) - 1) * 0.70
+                self.vel_bola_x += bonus_combo
+
             offset = (self.bola.centery - self.palete_esq.centery) / (ALTURA_PALETE / 2)
             self.vel_bola_y = offset * abs(self.vel_bola_x)
             self.sortear_estrategia_ia()
             self.criar_impacto(self.palete_esq.right, self.bola.centery, 1, 0, self.cor_barras, qtd=14, shake_intensidade=4, shake_duracao=6)
 
-        # Colisão com palete direita
+        # Colisão com palete direita (CPU ou Jogador 2)
         if self.bola.colliderect(self.palete_dir) and self.vel_bola_x > 0:
             self.bola.right = self.palete_dir.left
-            self.vel_bola_x = -self.vel_bola_x * 1.05
+
+            # Força de rebatimento gradual da CPU com os adversários
+            if self.modo_jogo == 1:
+                mult_cpu = 1.04 + min(0.10, (self.adversario_atual - 1) * 0.015)
+                self.vel_bola_x = -self.vel_bola_x * mult_cpu
+            else:
+                self.vel_bola_x = -self.vel_bola_x * 1.05
+
             offset = (self.bola.centery - self.palete_dir.centery) / (ALTURA_PALETE / 2)
             self.vel_bola_y = offset * abs(self.vel_bola_x)
             self.criar_impacto(self.palete_dir.left, self.bola.centery, -1, 0, self.cor_barras, qtd=14, shake_intensidade=4, shake_duracao=6)
 
-        # Limitar velocidade máxima para estabilidade física
-        vel_maxima = 14
+        # Limitar velocidade máxima física com cap
+        vel_maxima = 16.5
         self.vel_bola_x = max(-vel_maxima, min(vel_maxima, self.vel_bola_x))
         self.vel_bola_y = max(-vel_maxima, min(vel_maxima, self.vel_bola_y))
 
-        # Pontuação: aciona contagem regressiva de 2 segundos para o próximo saque
+        # Pontuação
         if self.bola.left <= 0:
             self.pontos_dir += 1
             self.iniciar_contagem_ponto(lado_marcador="dir")
@@ -1036,6 +1304,10 @@ class PongGame:
             self.desenhar_menu_principal()
         elif self.estado == "MENU_JOGAR":
             self.desenhar_menu_jogar()
+        elif self.estado == "MENU_RECORDES":
+            self.desenhar_menu_recordes()
+        elif self.estado == "REGISTRO_RECORDE":
+            self.desenhar_registro_recorde()
         elif self.estado == "MENU_OPCOES":
             self.desenhar_menu_opcoes()
         elif self.estado == "MENU_COMO_JOGAR":
@@ -1065,19 +1337,19 @@ class PongGame:
         self.tela.blit(dica, dica.get_rect(center=(LARGURA // 2, ALTURA - 40)))
 
     def desenhar_menu_principal(self):
-        """Menu principal com título 'Pong Clone' persistente e opções 1 a 4."""
+        """Menu principal com título 'Pong Clone' e 5 opções (Jogar, Recordes, Opções, Como Jogar, Sair)."""
         titulo = self.fonte_titulo.render("PONG CLONE", True, BRANCO)
-        rect_titulo = titulo.get_rect(center=(LARGURA // 2, 100))
+        rect_titulo = titulo.get_rect(center=(LARGURA // 2, 85))
         self.tela.blit(titulo, rect_titulo)
 
         sub = self.fonte_texto.render("SELECIONE UMA OPÇÃO:", True, CINZA_TEXTO)
-        self.tela.blit(sub, sub.get_rect(center=(LARGURA // 2, 160)))
+        self.tela.blit(sub, sub.get_rect(center=(LARGURA // 2, 145)))
 
         for btn in self.botoes_menu_principal:
             btn.desenhar(self.tela, self.fonte_botao)
 
-        dica = self.fonte_texto.render("Dica: Use o mouse ou os números [1, 2, 3, 4] no teclado", True, CINZA_TEXTO)
-        self.tela.blit(dica, dica.get_rect(center=(LARGURA // 2, ALTURA - 40)))
+        dica = self.fonte_texto.render("Dica: Use o mouse ou os números [1, 2, 3, 4, 5] no teclado", True, CINZA_TEXTO)
+        self.tela.blit(dica, dica.get_rect(center=(LARGURA // 2, ALTURA - 35)))
 
     def desenhar_menu_jogar(self):
         """Submenu de seleção de modo de jogo."""
@@ -1090,12 +1362,114 @@ class PongGame:
         for btn in self.botoes_menu_jogar:
             btn.desenhar(self.tela, self.fonte_botao)
 
-        if self.mensagem_aviso and (pygame.time.get_ticks() - self.tempo_aviso < 3500):
-            aviso = self.fonte_texto.render(self.mensagem_aviso, True, AMARELO)
-            rect_aviso = aviso.get_rect(center=(LARGURA // 2, 470))
-            pygame.draw.rect(self.tela, (40, 35, 10), rect_aviso.inflate(24, 14), border_radius=6)
-            pygame.draw.rect(self.tela, AMARELO, rect_aviso.inflate(24, 14), width=1, border_radius=6)
-            self.tela.blit(aviso, rect_aviso)
+    def desenhar_menu_recordes(self):
+        """Tela de exibição da tabela de recordes (Hall da Fama Arcade)."""
+        titulo = self.fonte_subtitulo.render("TABELA DE RECORDES - ARCADE", True, BRANCO)
+        self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 45)))
+
+        desc = self.fonte_texto.render("Maiores adversários alcançados no modo 1 Jogador:", True, CINZA_TEXTO)
+        self.tela.blit(desc, desc.get_rect(center=(LARGURA // 2, 78)))
+
+        # Moldura da Tabela
+        rect_tabela = pygame.Rect(90, 105, 620, 395)
+        pygame.draw.rect(self.tela, CINZA_CARD, rect_tabela, border_radius=10)
+        pygame.draw.rect(self.tela, CINZA_BORDA, rect_tabela, width=2, border_radius=10)
+
+        # Cabeçalho da Tabela
+        pygame.draw.rect(self.tela, (24, 24, 32), (rect_tabela.x, rect_tabela.y, rect_tabela.width, 36), border_top_left_radius=10, border_top_right_radius=10)
+        col_pos = rect_tabela.x + 35
+        col_nome = rect_tabela.x + 140
+        col_adv = rect_tabela.x + 295
+        col_combo = rect_tabela.x + 480
+
+        h_pos = self.fonte_botao.render("POS", True, AMARELO)
+        h_nome = self.fonte_botao.render("NOME", True, AMARELO)
+        h_adv = self.fonte_botao.render("ADVERSÁRIO", True, AMARELO)
+        h_combo = self.fonte_botao.render("MAX COMBO", True, AMARELO)
+
+        self.tela.blit(h_pos, (col_pos, rect_tabela.y + 6))
+        self.tela.blit(h_nome, (col_nome, rect_tabela.y + 6))
+        self.tela.blit(h_adv, (col_adv, rect_tabela.y + 6))
+        self.tela.blit(h_combo, (col_combo, rect_tabela.y + 6))
+
+        # Linhas dos Recordes
+        recordes = self.recordes[:8]
+        y_linha = rect_tabela.y + 48
+
+        for idx, rec in enumerate(recordes):
+            if idx == 0:
+                cor_pos = DOURADO
+            elif idx == 1:
+                cor_pos = (210, 215, 225)
+            elif idx == 2:
+                cor_pos = (205, 127, 50)
+            else:
+                cor_pos = BRANCO
+
+            txt_p = self.fonte_texto.render(f"{idx + 1}º", True, cor_pos)
+            txt_n = self.fonte_botao.render(rec.get("nome", "---"), True, cor_pos)
+            txt_a = self.fonte_texto.render(f"Adversário #{rec.get('adversario', 1)}", True, BRANCO)
+            txt_c = self.fonte_texto.render(f"x{rec.get('combo_max', 1)}", True, AMARELO)
+
+            self.tela.blit(txt_p, (col_pos + 6, y_linha + 3))
+            self.tela.blit(txt_n, (col_nome, y_linha))
+            self.tela.blit(txt_a, (col_adv + 8, y_linha + 3))
+            self.tela.blit(txt_c, (col_combo + 25, y_linha + 3))
+
+            pygame.draw.line(self.tela, (45, 45, 55), (rect_tabela.x + 20, y_linha + 36), (rect_tabela.right - 20, y_linha + 36), 1)
+            y_linha += 42
+
+        self.btn_voltar_recordes.desenhar(self.tela, self.fonte_botao)
+
+    def desenhar_registro_recorde(self):
+        """Tela de registro de recorde estilo arcade com 3 letras após o Game Over."""
+        rect_card = pygame.Rect(LARGURA // 2 - 260, ALTURA // 2 - 215, 520, 430)
+        pygame.draw.rect(self.tela, (14, 14, 20), rect_card, border_radius=12)
+        pygame.draw.rect(self.tela, (230, 60, 60), rect_card, width=3, border_radius=12)
+
+        tit = self.fonte_titulo.render("GAME OVER", True, (240, 60, 60))
+        self.tela.blit(tit, tit.get_rect(center=(LARGURA // 2, rect_card.y + 45)))
+
+        sub1 = self.fonte_subtitulo.render(f"VOCÊ CHEGOU AO ADVERSÁRIO #{self.adversario_atual}", True, AMARELO)
+        self.tela.blit(sub1, sub1.get_rect(center=(LARGURA // 2, rect_card.y + 100)))
+
+        sub2 = self.fonte_texto.render(f"Combo Máximo da Partida: x{self.max_combo_partida}", True, CINZA_TEXTO)
+        self.tela.blit(sub2, sub2.get_rect(center=(LARGURA // 2, rect_card.y + 135)))
+
+        lbl_ins = self.fonte_botao.render("INSIRA SUAS INICIAIS", True, BRANCO)
+        self.tela.blit(lbl_ins, lbl_ins.get_rect(center=(LARGURA // 2, rect_card.y + 180)))
+
+        # 3 Slots de Letras estilo arcade
+        largura_slot = 68
+        altura_slot = 68
+        espaco_slot = 24
+        x_base_slots = (LARGURA - (3 * largura_slot + 2 * espaco_slot)) // 2
+        y_slots = rect_card.y + 220
+
+        for i in range(3):
+            x_slot = x_base_slots + i * (largura_slot + espaco_slot)
+            rect_slot = pygame.Rect(x_slot, y_slots, largura_slot, altura_slot)
+            ativo = (i == self.slot_letra_ativo)
+
+            bg_slot = (32, 32, 44) if ativo else (18, 18, 24)
+            borda_slot = AMARELO if ativo else CINZA_BORDA
+
+            pygame.draw.rect(self.tela, bg_slot, rect_slot, border_radius=8)
+            pygame.draw.rect(self.tela, borda_slot, rect_slot, width=3 if ativo else 1, border_radius=8)
+
+            txt_l = self.fonte_subtitulo.render(self.iniciais_arcade[i], True, AMARELO if ativo else BRANCO)
+            self.tela.blit(txt_l, txt_l.get_rect(center=rect_slot.center))
+
+            if ativo:
+                seta_cima = self.fonte_texto.render("▲", True, AMARELO)
+                self.tela.blit(seta_cima, seta_cima.get_rect(center=(rect_slot.centerx, rect_slot.y - 14)))
+                seta_baixo = self.fonte_texto.render("▼", True, AMARELO)
+                self.tela.blit(seta_baixo, seta_baixo.get_rect(center=(rect_slot.centerx, rect_slot.bottom + 14)))
+
+        dica = self.fonte_texto.render("Use [CIMA/BAIXO/W/S] | [ENTER/ESPAÇO] para confirmar", True, CINZA_TEXTO)
+        self.tela.blit(dica, dica.get_rect(center=(LARGURA // 2, rect_card.y + 325)))
+
+        self.btn_confirmar_recorde.desenhar(self.tela, self.fonte_botao)
 
     def desenhar_menu_opcoes(self):
         """Menu de customização de cores e controle de volume."""
@@ -1105,11 +1479,9 @@ class PongGame:
         desc = self.fonte_texto.render("Escolha o elemento e selecione uma cor pré-definida:", True, CINZA_TEXTO)
         self.tela.blit(desc, desc.get_rect(center=(LARGURA // 2, 68)))
 
-        # Abas dos elementos
         for btn in self.botoes_abas_opcoes:
             btn.desenhar(self.tela, self.fonte_aba)
 
-        # Botões de cores pré-setadas
         pos_mouse = pygame.mouse.get_pos()
         cor_atual = self.cor_atual_elemento()
 
@@ -1118,22 +1490,19 @@ class PongGame:
             hover = rect.collidepoint(pos_mouse)
             selecionada = (btn_cor["cor"] == cor_atual)
 
-            # Fundo do botão da cor
             bg_cor = CINZA_CARD if hover or selecionada else (18, 18, 22)
             borda_cor = AMARELO if selecionada else (BRANCO if hover else CINZA_BORDA)
             pygame.draw.rect(self.tela, bg_cor, rect, border_radius=6)
             pygame.draw.rect(self.tela, borda_cor, rect, width=2 if selecionada else 1, border_radius=6)
 
-            # Amostra da cor (quadradinho preenchido)
             swatch_rect = pygame.Rect(rect.x + 8, rect.y + 6, 20, 20)
             pygame.draw.rect(self.tela, btn_cor["cor"], swatch_rect, border_radius=4)
             pygame.draw.rect(self.tela, BRANCO if btn_cor["cor"] == PRETO else CINZA_BORDA, swatch_rect, width=1, border_radius=4)
 
-            # Nome da cor
             txt_surface = self.fonte_texto.render(btn_cor["nome"], True, AMARELO if selecionada else BRANCO)
             self.tela.blit(txt_surface, (rect.x + 36, rect.y + 6))
 
-        # --- Mini Prévia em tempo real ---
+        # Mini Prévia em tempo real
         rect_preview = pygame.Rect(210, 258, 380, 120)
         pygame.draw.rect(self.tela, (10, 10, 15), rect_preview, border_radius=8)
         pygame.draw.rect(self.tela, CINZA_BORDA, rect_preview, width=2, border_radius=8)
@@ -1141,26 +1510,20 @@ class PongGame:
         lbl_preview = self.fonte_texto.render("Prévia em Tempo Real", True, CINZA_TEXTO)
         self.tela.blit(lbl_preview, (rect_preview.centerx - lbl_preview.get_width() // 2, rect_preview.y + 5))
 
-        # Linha pontilhada no preview (cor da rede)
         for y in range(rect_preview.y + 26, rect_preview.bottom - 6, 14):
             pygame.draw.rect(self.tela, self.cor_rede, (rect_preview.centerx - 1, y, 3, 7))
 
-        # Paletes do preview (cor das barras)
         pygame.draw.rect(self.tela, self.cor_barras, (rect_preview.x + 18, rect_preview.centery - 24, 7, 48), border_radius=2)
         pygame.draw.rect(self.tela, self.cor_barras, (rect_preview.right - 25, rect_preview.centery - 24, 7, 48), border_radius=2)
-
-        # Bolinha do preview (cor da bola)
         pygame.draw.rect(self.tela, self.cor_bola, (rect_preview.centerx - 5, rect_preview.centery - 5, 10, 10))
 
-        # --- Seção de Controle de Volume ---
+        # Seção de Controle de Volume
         pct_volume = int(round(self.volume * 100))
         lbl_vol = self.fonte_texto.render(f"VOLUME DO JOGO: {pct_volume}%", True, AMARELO)
         self.tela.blit(lbl_vol, (LARGURA // 2 - lbl_vol.get_width() // 2, 396))
 
-        # Botão [-]
         self.btn_vol_menos.desenhar(self.tela, self.fonte_botao)
 
-        # Barra de volume
         pygame.draw.rect(self.tela, (14, 14, 18), self.rect_barra_volume, border_radius=6)
         largura_preenchida = int(self.rect_barra_volume.width * self.volume)
         if largura_preenchida > 0:
@@ -1168,19 +1531,15 @@ class PongGame:
             pygame.draw.rect(self.tela, AMARELO, rect_preenchido, border_radius=6)
         pygame.draw.rect(self.tela, CINZA_BORDA, self.rect_barra_volume, width=2, border_radius=6)
 
-        # Indicador / Knob do volume
         knob_x = self.rect_barra_volume.x + largura_preenchida
         knob_rect = pygame.Rect(knob_x - 4, self.rect_barra_volume.y - 3, 8, self.rect_barra_volume.height + 6)
         pygame.draw.rect(self.tela, BRANCO, knob_rect, border_radius=3)
 
-        # Botão [+]
         self.btn_vol_mais.desenhar(self.tela, self.fonte_botao)
 
-        # Dica de volume
         dica_vol = self.fonte_texto.render("Ajuste com [-] / [+] ou Setas Esquerda/Direita", True, CINZA_TEXTO)
         self.tela.blit(dica_vol, (LARGURA // 2 - dica_vol.get_width() // 2, 468))
 
-        # Botão Voltar
         self.btn_voltar_opcoes.desenhar(self.tela, self.fonte_botao)
 
     def desenhar_como_jogar(self):
@@ -1197,7 +1556,7 @@ class PongGame:
         self.tela.blit(tit1, (rect_card1.x + 22, rect_card1.y + 12))
 
         linhas_controles = [
-            "• Modo 1 Jogador   : Você (W / S) contra a IA balanceada",
+            "• Modo 1 Jogador   : Você (W / S) contra os Adversários da CPU",
             "• Modo 2 Jogadores : Jogador 1 (W / S) vs Jogador 2 (Setas)",
             "• Tecla [ R ]      : Reiniciar a partida imediatamente",
             "• Tecla [ ESC ]    : Retornar ao menu principal",
@@ -1213,16 +1572,16 @@ class PongGame:
         pygame.draw.rect(self.tela, CINZA_CARD, rect_card2, border_radius=8)
         pygame.draw.rect(self.tela, CINZA_BORDA, rect_card2, width=1, border_radius=8)
 
-        tit2 = self.fonte_botao.render("REGRAS DO PONG", True, AMARELO)
+        tit2 = self.fonte_botao.render("REGRAS & CAMPANHA ARCADE", True, AMARELO)
         self.tela.blit(tit2, (rect_card2.x + 22, rect_card2.y + 12))
 
         linhas_regras = [
-            "1. Controle sua palete e não deixe a bola passar da defesa.",
-            "2. Cada bola que ultrapassar o rival rende 1 ponto.",
-            "3. A cada ponto marcado, há 2s de pausa para a próxima bola.",
-            "4. A velocidade da bola aumenta a cada rebatida na palete.",
-            "5. O ângulo do rebote varia com o local de impacto na palete.",
-            "6. A CPU possui velocidade justa: vença com reflexo e ângulo!",
+            "1. No modo 1P: 3 vidas (corações). Ponto sofrido custa 1 vida.",
+            "2. Derrote a CPU para avançar: cada adversário é mais rápido e forte!",
+            "3. Vencer recupera seus corações. Adversários ganham mais vidas.",
+            "4. COMBO: Faça pontos rápidos para acelerar a bola e causar 2x dano!",
+            "5. Ao perder, registre seu nome de 3 letras na Tabela de Recordes.",
+            "6. A CPU rebate com ângulos dinâmicos e velocidade justa.",
         ]
         y_c2 = rect_card2.y + 44
         for linha in linhas_regras:
@@ -1230,27 +1589,30 @@ class PongGame:
             self.tela.blit(txt, (rect_card2.x + 22, y_c2))
             y_c2 += 29
 
-        # Botão Voltar
         self.btn_voltar_como_jogar.desenhar(self.tela, self.fonte_botao)
 
     def desenhar_jogo(self):
-        """Renderiza a quadra de jogo com cores customizadas, partículas e leve tremida de tela."""
+        """Renderiza a quadra de jogo com vidas, corações, combo, adversário e efeitos retrô."""
         self.superficie_jogo.fill(PRETO)
 
-        # Rede pontilhada central (com a cor customizada da rede)
+        # Rede pontilhada central
         passo = 15
         for y in range(0, ALTURA, passo * 2):
             pygame.draw.rect(self.superficie_jogo, self.cor_rede, (LARGURA // 2 - 2, y, 4, passo))
 
-        # Paletes (ambas compartilham a mesma cor customizada)
+        # Paletes
         pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_esq)
         pygame.draw.rect(self.superficie_jogo, self.cor_barras, self.palete_dir)
+
+        # Ondas aquáticas de impacto retrô ao fazer ponto
+        for o in self.ondas_impacto:
+            o.desenhar(self.superficie_jogo)
 
         # Partículas de impacto no ar
         for p in self.particulas:
             p.desenhar(self.superficie_jogo)
 
-        # Rastro retrô da bola (fantasma / efeito fósforo CRT)
+        # Rastro retrô da bola
         qtd = len(self.rastro_bola_jogo)
         for i, pos in enumerate(self.rastro_bola_jogo):
             fator = (i + 1) / (qtd + 1)
@@ -1267,19 +1629,70 @@ class PongGame:
         # Bolinha quadrada clássica retrô
         pygame.draw.rect(self.superficie_jogo, self.cor_bola, self.bola)
 
-        # Placar numérico
-        texto_esq = self.fonte_placar.render(str(self.pontos_esq), True, BRANCO)
-        texto_dir = self.fonte_placar.render(str(self.pontos_dir), True, BRANCO)
-        self.superficie_jogo.blit(texto_esq, (LARGURA // 4 - texto_esq.get_width() // 2, 25))
-        self.superficie_jogo.blit(texto_dir, (3 * LARGURA // 4 - texto_dir.get_width() // 2, 25))
+        # Placar, Vidas e Combos
+        if self.modo_jogo == 1:
+            # Distintivo do Adversário Atual no topo
+            rect_adv = pygame.Rect(LARGURA // 2 - 100, 16, 200, 32)
+            pygame.draw.rect(self.superficie_jogo, CINZA_CARD, rect_adv, border_radius=6)
+            pygame.draw.rect(self.superficie_jogo, AMARELO, rect_adv, width=2, border_radius=6)
+            txt_adv = self.fonte_texto_bold.render(f"ADVERSÁRIO #{self.adversario_atual}", True, AMARELO)
+            self.superficie_jogo.blit(txt_adv, txt_adv.get_rect(center=rect_adv.center))
 
-        # Rótulos dos jogadores no placar
-        nome_esq = "JOGADOR 1" if self.modo_jogo == 2 else "VOCÊ"
-        nome_dir = "JOGADOR 2" if self.modo_jogo == 2 else "CPU (IA)"
-        lbl_esq = self.fonte_texto.render(nome_esq, True, CINZA_TEXTO)
-        lbl_dir = self.fonte_texto.render(nome_dir, True, CINZA_TEXTO)
-        self.superficie_jogo.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
-        self.superficie_jogo.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
+            # --- LADO ESQUERDO: VOCÊ ---
+            lbl_esq = self.fonte_texto.render("VOCÊ", True, BRANCO)
+            self.superficie_jogo.blit(lbl_esq, (60, 20))
+
+            # Corações do Jogador (sempre 3 corações máximos)
+            for i in range(3):
+                desenhar_coracao(self.superficie_jogo, 60 + i * 26, 44, tamanho=20, cor=VERMELHO_CORACAO, preenchido=(i < self.vida_jogador))
+
+            # --- LADO DIREITO: CPU (ADVERSÁRIO) ---
+            lbl_dir = self.fonte_texto.render(f"CPU (ADV #{self.adversario_atual})", True, BRANCO)
+            self.superficie_jogo.blit(lbl_dir, (LARGURA - 60 - lbl_dir.get_width(), 20))
+
+            # Corações da CPU (Regra 7):
+            # Se vida máxima <= 5: desenha os corações individuais
+            # Se vida máxima > 5: desenha 1 coração com "x{self.vida_cpu}"
+            if self.vida_cpu_maxima <= 5:
+                largura_total_coracoes = self.vida_cpu_maxima * 26
+                x_base_cpu = LARGURA - 60 - largura_total_coracoes
+                for i in range(self.vida_cpu_maxima):
+                    desenhar_coracao(self.superficie_jogo, x_base_cpu + i * 26, 44, tamanho=20, cor=VERMELHO_CORACAO, preenchido=(i < self.vida_cpu))
+            else:
+                txt_qtd = self.fonte_subtitulo.render(f"x{self.vida_cpu}", True, AMARELO)
+                x_coracao = LARGURA - 70 - txt_qtd.get_width() - 26
+                desenhar_coracao(self.superficie_jogo, x_coracao, 42, tamanho=22, cor=VERMELHO_CORACAO, preenchido=True)
+                self.superficie_jogo.blit(txt_qtd, (x_coracao + 28, 40))
+
+            # --- PAINEL DO COMBO DO JOGADOR ---
+            if self.combo_atual > 0:
+                rect_combo = pygame.Rect(30, 78, 220, 42)
+                cor_borda_combo = (245, 60, 60) if self.combo_atual >= 5 else AMARELO
+                pygame.draw.rect(self.superficie_jogo, (16, 16, 22), rect_combo, border_radius=6)
+                pygame.draw.rect(self.superficie_jogo, cor_borda_combo, rect_combo, width=2, border_radius=6)
+
+                txt_combo = f"COMBO x{self.combo_atual} [DANO 2x!]" if self.combo_atual >= 5 else f"COMBO x{self.combo_atual}"
+                surf_c = self.fonte_texto_bold.render(txt_combo, True, cor_borda_combo)
+                self.superficie_jogo.blit(surf_c, (rect_combo.x + 8, rect_combo.y + 4))
+
+                pct_tempo = max(0.0, min(1.0, self.tempo_combo_restante / self.tempo_combo_janela))
+                rect_barra = pygame.Rect(rect_combo.x + 8, rect_combo.y + 24, 140, 10)
+                pygame.draw.rect(self.superficie_jogo, (35, 35, 45), rect_barra, border_radius=3)
+                if pct_tempo > 0:
+                    pygame.draw.rect(self.superficie_jogo, cor_borda_combo, (rect_barra.x, rect_barra.y, int(rect_barra.width * pct_tempo), rect_barra.height), border_radius=3)
+                txt_t = self.fonte_texto.render(f"{self.tempo_combo_restante:.1f}s", True, BRANCO)
+                self.superficie_jogo.blit(txt_t, (rect_combo.x + 155, rect_combo.y + 21))
+
+        else:
+            # Placar clássico no Modo 2 Jogadores
+            texto_esq = self.fonte_placar.render(str(self.pontos_esq), True, BRANCO)
+            texto_dir = self.fonte_placar.render(str(self.pontos_dir), True, BRANCO)
+            self.superficie_jogo.blit(texto_esq, (LARGURA // 4 - texto_esq.get_width() // 2, 25))
+            self.superficie_jogo.blit(texto_dir, (3 * LARGURA // 4 - texto_dir.get_width() // 2, 25))
+            lbl_esq = self.fonte_texto.render("JOGADOR 1", True, CINZA_TEXTO)
+            lbl_dir = self.fonte_texto.render("JOGADOR 2", True, CINZA_TEXTO)
+            self.superficie_jogo.blit(lbl_esq, (LARGURA // 4 - lbl_esq.get_width() // 2, 75))
+            self.superficie_jogo.blit(lbl_dir, (3 * LARGURA // 4 - lbl_dir.get_width() // 2, 75))
 
         # Contador de 3 segundos na tela antes de iniciar a partida
         if self.em_contagem:
@@ -1297,13 +1710,13 @@ class PongGame:
 
         # Contador de 2 segundos após marcação de ponto
         elif self.em_contagem_ponto:
-            rect_box = pygame.Rect(LARGURA // 2 - 140, ALTURA // 2 - 95, 280, 190)
+            rect_box = pygame.Rect(LARGURA // 2 - 150, ALTURA // 2 - 95, 300, 190)
 
             # Estilo e texto personalizados de acordo com quem pontuou
             if self.modo_jogo == 1:
                 if self.ultimo_marcador == "esq":
                     cor_borda = VERDE_DESTAQUE
-                    txt_titulo = "SEU PONTO!"
+                    txt_titulo = "SEU PONTO!" if not self.mensagem_transicao_adv else "VITÓRIA!"
                 else:
                     cor_borda = (235, 75, 75)
                     txt_titulo = "PONTO DA CPU!"
@@ -1322,7 +1735,11 @@ class PongGame:
             rect_cont = txt_cont.get_rect(center=(LARGURA // 2, ALTURA // 2 + 5))
             self.superficie_jogo.blit(txt_cont, rect_cont)
 
-            txt_prox = self.fonte_texto.render("Próxima bola em...", True, BRANCO)
+            if self.modo_jogo == 1 and self.mensagem_transicao_adv and (pygame.time.get_ticks() - self.tempo_transicao_adv < 3000):
+                txt_prox = self.fonte_texto_bold.render(f"Próximo: Adversário #{self.adversario_atual}", True, AMARELO)
+            else:
+                txt_prox = self.fonte_texto.render("Próxima bola em...", True, BRANCO)
+
             rect_prox = txt_prox.get_rect(center=(LARGURA // 2, ALTURA // 2 + 62))
             self.superficie_jogo.blit(txt_prox, rect_prox)
 

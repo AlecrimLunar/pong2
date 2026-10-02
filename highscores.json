@@ -1,0 +1,38 @@
+[
+  {
+    "nome": "AND",
+    "adversario": 20,
+    "combo_max": 5,
+    "data": "2026-10-02"
+  },
+  {
+    "nome": "ACE",
+    "adversario": 10,
+    "combo_max": 5,
+    "data": "2026-10-01"
+  },
+  {
+    "nome": "VET",
+    "adversario": 7,
+    "combo_max": 4,
+    "data": "2026-10-01"
+  },
+  {
+    "nome": "BOT",
+    "adversario": 5,
+    "combo_max": 3,
+    "data": "2026-10-01"
+  },
+  {
+    "nome": "CPU",
+    "adversario": 3,
+    "combo_max": 2,
+    "data": "2026-10-01"
+  },
+  {
+    "nome": "P1_",
+    "adversario": 1,
+    "combo_max": 1,
+    "data": "2026-10-01"
+  }
+]

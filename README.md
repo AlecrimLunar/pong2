@@ -1,6 +1,6 @@
-# Pong Clone (Pygame)
+# Pong Clone (Pygame-CE)
 
-Uma recriação clássica e customizável do jogo **Pong** desenvolvida em Python utilizando a biblioteca **Pygame**.
+Uma recriação clássica, customizável e com modo campanha Roguelite Arcade do jogo **Pong**, desenvolvida em Python utilizando a biblioteca **Pygame-CE (Community Edition)**.
 
 ---
 
@@ -29,7 +29,6 @@ python -m venv .venv
 
 **No Linux / macOS:**
 ```bash
-bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
@@ -51,49 +50,47 @@ python main.py
 
 ---
 
-## 🎮 Menus e Funcionalidades
+## 🎮 Menus e Modos de Jogo
 
+- **Campanha Roguelite Arcade (1 Jogador vs CPU):**
+  - **Sistema de Vidas (Corações):** Jogador e CPU começam com 3 corações. Cada gol sofrido consome 1 vida.
+  - **Progressão Infinita de Adversários:** Ao zerar os corações da CPU, você avança imediatamente para o próximo adversário! O jogador recupera todos os corações perdidos e o novo adversário ganha +1 coração máximo, maior velocidade e rebatidas mais fortes.
+  - **Layout Inteligente de Vidas da CPU:** Para adversários avançados com mais de 5 corações de vida (ex: Adversário 20 com 22 vidas), o layout simplifica automaticamente para `♥ x[quantidade]`, mantendo o visual limpo e legível.
+  - **Mecânica Exclusiva de Combo (Jogador):**
+    - A cada ponto feito pelo jogador, um temporizador é iniciado (20 segundos no Combo 1, diminuindo até 6 segundos no Combo 5).
+    - A cada nível de combo, as rebatidas do jogador impulsionam a bola com mais velocidade.
+    - Ao atingir o **Combo 5**, cada ponto marcado causa **2 de dano** na CPU!
+    - Se o tempo do combo esgotar ou a CPU pontuar, o combo é zerado.
+  - **Registro de Recordes Arcade (Game Over):** Ao perder todas as 3 vidas, registre seu recorde com **3 letras** como nas máquinas clássicas de fliperama dos anos 80.
+- **Tabela de Ranque Persistente (Hall da Fama):**
+  - Acessível diretamente pelo Menu Inicial (`2 - Recordes`) ou ao final de cada partida.
+  - Salva em disco (`highscores.json`) os melhores recordes de adversário alcançado e combo máximo.
+- **Modo 2 Jogadores:**
+  - Disputa local clássica para dois jogadores no mesmo teclado com placar tradicional.
+- **Efeito Visual Aquático de Ponto (Gota d'Água):**
+  - Ao fazer ponto, ondas concêntricas retrô se propagam suavemente a partir do ponto de impacto na tela.
 - **Trilha Sonora e Efeitos de Áudio Completos (`Sons/`):**
   - `menu_sound.mp3`: Trilha sonora contínua em loop nos menus de seleção.
   - `partida_sound.mp3`: Trilha de gameplay durante as partidas.
-  - `3_seg_sound.mp3`: Som narrativo de contagem regressiva de 3 segundos para início da partida.
+  - `3_seg_sound.mp3`: Contagem regressiva de 3 segundos para início da partida.
   - `ball_hit.mp3`: Efeito sonoro retrô a cada rebatida da bola nas paletes e colisão com paredes.
   - `button_sound.mp3`: Som de feedback ao clicar em botões, abas ou navegar pelo teclado.
-  - `yourself_point.mp3`: Som vibrante de gol para quando você marca ponto (Modo 1P) ou quando qualquer um dos jogadores pontua (Modo 2P).
-  - `enemy_point.mp3`: Som de ponto sofrido quando a CPU marca um gol contra o jogador (Modo 1P).
+  - `yourself_point.mp3`: Som vibrante de gol ao pontuar contra a CPU (1P) ou pelos jogadores (2P).
+  - `enemy_point.mp3`: Som de ponto sofrido quando a CPU marca um gol (1P).
 - **Controle Interativo de Volume nas Opções:**
-  - Slider interativo com porcentagem visual em tempo real (0% a 100%).
-  - Ajustável via botões `[-]` e `[+]`, clique/arrasto direto do mouse na barra ou teclas de seta `[Esquerda]` / `[Direita]`.
-  - Regula proporcionalmente tanto as músicas de fundo quanto todos os efeitos sonoros.
-- **Contador de 2 Segundos Pós-Ponto:**
-  - A cada gol/ponto marcado, a bola é reposicionada no centro e uma contagem de 2 segundos ("PONTO!") é exibida na tela antes de lançar o próximo saque, permitindo que os jogadores se reposicionem estrategicamente.
-- **Contagem Regressiva de 3 Segundos no Início:**
-  - Ao iniciar ou reiniciar uma partida com `R`, uma contagem de 3 segundos sincronizada com o áudio prepara os jogadores.
+  - Slider interativo com porcentagem visual em tempo real (0% a 100%), ajustável via mouse ou teclado (`-` e `+` / Setas).
 - **Partida de Fundo Retrô nos Menus:**
-  - Enquanto navega por qualquer menu (Abertura, Principal, Jogar, Opções e Como Jogar), uma partida autônoma de Pong (IA vs IA) acontece em segundo plano, com paletes animadas rebatendo a bolinha e marcando pontos em tempo real.
-- **Estética Retrô CRT & Impactos Dinâmicos:**
-  - **Partículas Quadradas de Impacto:** A cada colisão da bola com as paredes superior/inferior ou com as paletes, pequenas partículas quadradas explodem na direção do impacto e se dissolvem suavemente no ar.
-  - **Tremor de Tela (Screen Shake):** Leve tremor na tela a cada colisão que traz peso e sensação física aos lances.
-  - **Scanlines:** Linhas horizontais sutis simulam monitores de tubo (CRT) e arcades clássicos dos anos 70/80.
-  - **Rastro de Fósforo (Ghosting):** A bolinha deixa um rastro de persistência luminosa e movimento fluido.
-  - **Pixel Art Clássico:** Bolinha quadrada clássica do Pong original e rede pontilhada retrô.
-- **Tela de Abertura:** Moldura retrô com título "Pong Clone" em destaque e aviso interativo *"Aperte qualquer tecla para iniciar"*.
-- **Menu Principal:**
-  - `1 - Jogar`: Submenu com opções para:
-    - **1 Jogador (vs IA):** Enfrente a CPU com inteligência artificial humanizada, **rebatidas imprevisíveis com ângulos variados** (a CPU varia propositalmente o ponto de contato na palete para lançar diagonais altas, baixas e retas) e limite de velocidade balanceado.
-    - **2 Jogadores:** Partida clássica local para dois jogadores no mesmo teclado.
-  - `2 - Opções`: Personalização de cores exclusivas para as **Barras** (ambas compartilham a mesma cor), **Bolinha** e **Rede Central**, prévia em tempo real e controle de volume geral do jogo.
-  - `3 - Como Jogar`: Tela com os controles e regras detalhadas do jogo sem estouro de layout.
-  - `4 - Sair`: Encerra o jogo.
+  - Uma simulação autônoma de Pong (IA vs IA) acontece em segundo plano nos menus com scanlines CRT, partículas e rastros luminosos.
 
 ---
 
 ## ⌨️ Controles
 
-- **Navegação pelos Menus:** Mouse (cliques nos botões e cores) ou teclado (`1`, `2`, `3`, `4` e `ESC` para voltar).
-- **Controle de Volume (Opções):** Teclas `Seta Esquerda` / `-` para diminuir, `Seta Direita` / `+` para aumentar, ou botões na tela.
+- **Navegação pelos Menus:** Mouse ou teclas numéricas (`1`, `2`, `3`, `4`, `5` e `ESC` para voltar).
+- **Registro de Iniciais no Arcade:** `Setas Cima / Baixo` ou `W / S` para mudar a letra, `Setas Esquerda / Direita` para trocar de slot e `ENTER` ou `ESPAÇO` para confirmar.
 - **Jogador 1 / Você (Esquerda):** `W` (Cima) / `S` (Baixo)
-- **Jogador 2 / CPU (Direita):** `Seta para Cima` / `Seta para Baixo` (no modo 2P) ou controlado pela IA (no modo 1P)
+- **Jogador 2 (Direita - Modo 2P):** `Seta para Cima` / `Seta para Baixo`
+- **Controle de Volume (Opções):** Teclas `Seta Esquerda` / `-` para diminuir, `Seta Direita` / `+` para aumentar.
 - **Reiniciar Partida:** Tecla `R`
 - **Voltar ao Menu / Pausar:** Tecla `ESC`
 
@@ -116,11 +113,12 @@ python main.py
 ## 📁 Estrutura do Projeto
 
 ```text
-├── .venv/               # Ambiente virtual Python (ignorado pelo git)
+├── .venv/               # Ambiente virtual Python
 ├── .gitignore           # Regras de exclusão do git
-├── requirements.txt     # Dependências do projeto
-├── README.md            # Documentação do projeto
-├── main.py              # Ponto de entrada do jogo Pong e sistema de menus
+├── highscores.json      # Dados persistentes da Tabela de Recordes Arcade
+├── requirements.txt     # Dependências (pygame-ce)
+├── README.md            # Documentação completa do projeto
+├── main.py              # Ponto de entrada do jogo Pong, campanhas e menus
 └── Sons/                # Arquivos de áudio (efeitos sonoros e trilha sonora)
     ├── 3_seg_sound.mp3   # Áudio da contagem de 3 segundos
     ├── ball_hit.mp3      # Som de impacto da bolinha
